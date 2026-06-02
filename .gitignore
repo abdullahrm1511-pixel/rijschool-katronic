@@ -1,43 +1,49 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
 
-# dependencies
-node_modules/
-
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
 
 # macOS
 .DS_Store
-*.pem
 
-# local env files
-.env*.local
+# Local generated archives
+*.zip
+*.ipa
+*.xcarchive
 
-# typescript
-*.tsbuildinfo
-
-app-example
-
-# generated native folders
-/ios
-/android
+# Old Expo/React Native project leftovers in this workspace
+.claude/
+.expo/
+.vscode/
+app/
+assets/
+components/
+constants/
+data/
+dist/
+hooks/
+node_modules/
+RijschoolKatronicSwift/
+RijschoolKatronic-Xcode-Ready-20260602/
+scripts/
+types/
+utils/
+AGENTS.md
+CLAUDE.md
+MAC_XCODE_STAPPEN.md
+app.json
+eas.json
+eslint.config.js
+expo-env.d.ts
+package-lock.json
+package.json
+tsconfig.json
