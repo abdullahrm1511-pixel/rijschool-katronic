@@ -47,6 +47,7 @@ struct AgendaView: View {
     @State private var bookingSlot: (String, String)?
     @State private var bookingDoubleBlock = false
     @State private var selectedLesson: Lesson?
+    @State private var showExamOverview = false
 
     var body: some View {
         NavigationStack {
@@ -95,7 +96,16 @@ struct AgendaView: View {
             }
             .navigationTitle("Agenda")
             .toolbar {
-                Button("Vandaag") { selectedDate = Date() }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Menu("Opties") {
+                        Button("Alle examens") {
+                            showExamOverview = true
+                        }
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Vandaag") { selectedDate = Date() }
+                }
             }
             .gesture(
                 DragGesture(minimumDistance: 30)
@@ -110,6 +120,9 @@ struct AgendaView: View {
             )
             .sheet(item: $selectedLesson) { lesson in
                 LessonDetailView(lesson: lesson)
+            }
+            .sheet(isPresented: $showExamOverview) {
+                ExamOverviewView()
             }
             .sheet(isPresented: Binding(
                 get: { bookingSlot != nil },
@@ -194,6 +207,56 @@ struct AgendaView: View {
             .padding()
             .background(Color.orange.opacity(0.14))
             .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+    }
+}
+
+struct ExamOverviewView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: AppStore
+    @State private var selectedLesson: Lesson?
+
+    private var exams: [Lesson] {
+        store.data.lessons
+            .filter { $0.kind == .exam }
+            .sorted {
+                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
+                    return $0.startTime < $1.startTime
+                }
+                return $0.date < $1.date
+            }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if exams.isEmpty {
+                    Text("Geen examens ingepland")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(exams) { exam in
+                        Button {
+                            selectedLesson = exam
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(store.student(for: exam)?.name ?? "Leerling")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text("\(formatDutchDate(exam.date)) - \(exam.startTime)-\(exam.endTime)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Alle examens")
+            .toolbar {
+                Button("Sluit") { dismiss() }
+            }
+            .sheet(item: $selectedLesson) { lesson in
+                LessonDetailView(lesson: lesson)
+            }
         }
     }
 }

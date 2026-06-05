@@ -19,19 +19,23 @@ final class AppStore: ObservableObject {
 
     func addStudent(_ student: Student) {
         data.students.insert(student, at: 0)
+        save()
     }
 
     func updateStudent(_ student: Student) {
         data.students = data.students.map { $0.id == student.id ? student : $0 }
+        save()
     }
 
     func deleteStudent(_ student: Student) {
         data.students.removeAll { $0.id == student.id }
         data.lessons.removeAll { $0.studentId == student.id }
+        save()
     }
 
     func addLesson(_ lesson: Lesson) {
         data.lessons.append(lesson)
+        save()
     }
 
     func addWeeklyLessons(studentId: UUID, startDate: Date, startTime: String, endTime: String, amount: Double) -> Int {
@@ -58,15 +62,24 @@ final class AppStore: ObservableObject {
             data.lessons.append(candidate)
             created += 1
         }
+        save()
         return created
     }
 
     func updateLesson(_ lesson: Lesson) {
-        data.lessons = data.lessons.map { $0.id == lesson.id ? lesson : $0 }
+        guard let index = data.lessons.firstIndex(where: { $0.id == lesson.id }) else { return }
+        data.lessons[index] = lesson
+        save()
     }
 
     func deleteLesson(_ lesson: Lesson) {
         data.lessons.removeAll { $0.id == lesson.id }
+        save()
+    }
+
+    func deleteRecurringSeries(_ seriesId: UUID) {
+        data.lessons.removeAll { $0.recurringSeriesId == seriesId }
+        save()
     }
 
     func lessons(on date: Date) -> [Lesson] {
@@ -114,6 +127,7 @@ final class AppStore: ObservableObject {
 
     func updateSettings(_ settings: AppSettings) {
         data.settings = settings
+        save()
     }
 
     private func overlaps(_ a: Lesson, _ b: Lesson) -> Bool {
@@ -125,6 +139,7 @@ final class AppStore: ObservableObject {
     private func save() {
         if let encoded = try? JSONEncoder().encode(data) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
+            UserDefaults.standard.synchronize()
         }
     }
 }

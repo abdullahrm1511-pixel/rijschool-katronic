@@ -154,6 +154,7 @@ struct StudentDetailView: View {
             Section {
                 Button("Bewaar leerling") {
                     store.updateStudent(student)
+                    dismiss()
                 }
                 Button(role: .destructive) {
                     store.deleteStudent(student)
@@ -169,6 +170,9 @@ struct StudentDetailView: View {
         }
         .onDisappear {
             store.updateStudent(student)
+        }
+        .onChange(of: student) { updatedStudent in
+            store.updateStudent(updatedStudent)
         }
     }
 }

@@ -95,6 +95,8 @@ struct LessonDetailView: View {
     @State var lesson: Lesson
     @State private var tab = 0
     @State private var savedMessage = false
+    @State private var amountText = ""
+    @State private var paidAmountText = ""
 
     var body: some View {
         NavigationStack {
@@ -120,9 +122,9 @@ struct LessonDetailView: View {
 
                     if lesson.kind == .lesson {
                         Section("Betaling") {
-                            TextField("Lesprijs", value: $lesson.amount, format: .number)
+                            TextField("Lesprijs", text: $amountText)
                                 .keyboardType(.decimalPad)
-                            TextField("Betaald bedrag", value: $lesson.paidAmount, format: .number)
+                            TextField("Betaald bedrag", text: $paidAmountText)
                                 .keyboardType(.decimalPad)
                             Text("Open voor deze les: EUR \(max(0, lesson.remainingAmount), specifier: "%.2f")")
                                 .foregroundStyle(lesson.remainingAmount > 0 ? .red : .green)
@@ -177,18 +179,45 @@ struct LessonDetailView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Bewaar") {
                         saveLesson()
+                        dismiss()
                     }
                 }
             }
             .onDisappear {
                 saveLesson()
             }
+            .onChange(of: lesson) { _ in
+                store.updateLesson(normalizedLesson)
+            }
+            .onAppear {
+                amountText = formatEuroInput(lesson.amount)
+                paidAmountText = formatEuroInput(lesson.paidAmount)
+            }
+            .onChange(of: amountText) { value in
+                lesson.amount = parseEuroInput(value)
+            }
+            .onChange(of: paidAmountText) { value in
+                lesson.paidAmount = parseEuroInput(value)
+            }
         }
     }
 
+    private var normalizedLesson: Lesson {
+        var updated = lesson
+        updated.paid = updated.kind == .exam || updated.paidAmount >= updated.amount
+        return updated
+    }
+
     private func saveLesson() {
-        lesson.paid = lesson.kind == .exam || lesson.paidAmount >= lesson.amount
-        store.updateLesson(lesson)
+        store.updateLesson(normalizedLesson)
         savedMessage = true
     }
+}
+
+private func parseEuroInput(_ value: String) -> Double {
+    Double(value.replacingOccurrences(of: ",", with: ".")) ?? 0
+}
+
+private func formatEuroInput(_ value: Double) -> String {
+    String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",")
 }

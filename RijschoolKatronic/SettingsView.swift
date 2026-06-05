@@ -6,6 +6,32 @@ struct SettingsView: View {
     @State private var lessonSearch = ""
     @State private var selectedLesson: Lesson?
 
+    private var fixedLessonSeries: [FixedLessonSeries] {
+        let grouped = Dictionary(grouping: store.data.lessons.filter { $0.recurringSeriesId != nil }) { lesson in
+            lesson.recurringSeriesId!
+        }
+        return grouped.compactMap { seriesId, lessons in
+            guard let first = lessons.sorted(by: { $0.date < $1.date }).first else { return nil }
+            let weekdayIndex = Calendar.current.component(.weekday, from: first.date)
+            return FixedLessonSeries(
+                id: seriesId,
+                studentName: store.student(for: first)?.name ?? "Leerling",
+                weekdayOrder: weekdayIndex == 1 ? 7 : weekdayIndex - 1,
+                weekday: dutchWeekdays[weekdayIndex - 1],
+                startTime: first.startTime,
+                endTime: first.endTime,
+                nextDate: lessons.filter { $0.date >= Calendar.current.startOfDay(for: Date()) }.sorted { $0.date < $1.date }.first?.date,
+                count: lessons.count
+            )
+        }
+        .sorted {
+            if $0.weekdayOrder == $1.weekdayOrder {
+                return $0.startTime < $1.startTime
+            }
+            return $0.weekdayOrder < $1.weekdayOrder
+        }
+    }
+
     private var filteredLessons: [Lesson] {
         store.data.lessons
             .sorted {
@@ -69,6 +95,34 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Vaste lessen") {
+                    if fixedLessonSeries.isEmpty {
+                        Text("Geen vaste lessen ingepland")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(fixedLessonSeries) { series in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(series.studentName).bold()
+                                Text("\(series.weekday) - \(series.startTime)-\(series.endTime)")
+                                    .foregroundStyle(.secondary)
+                                Text("\(series.count) lessen ingepland")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if let nextDate = series.nextDate {
+                                    Text("Eerstvolgend: \(formatDutchDate(nextDate))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Button(role: .destructive) {
+                                    store.deleteRecurringSeries(series.id)
+                                } label: {
+                                    Text("Verwijder vaste reeks")
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section("Alle lessen zoeken") {
                     TextField("Zoek datum, leerling of tijd", text: $lessonSearch)
                 }
@@ -113,9 +167,23 @@ struct SettingsView: View {
             .onAppear {
                 settings = store.data.settings
             }
+            .onChange(of: settings) { updatedSettings in
+                store.updateSettings(updatedSettings)
+            }
             .sheet(item: $selectedLesson) { lesson in
                 LessonDetailView(lesson: lesson)
             }
         }
     }
+}
+
+private struct FixedLessonSeries: Identifiable {
+    let id: UUID
+    let studentName: String
+    let weekdayOrder: Int
+    let weekday: String
+    let startTime: String
+    let endTime: String
+    let nextDate: Date?
+    let count: Int
 }
