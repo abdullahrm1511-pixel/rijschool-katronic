@@ -81,20 +81,23 @@ struct StudentDetailView: View {
     @EnvironmentObject private var store: AppStore
     @State var student: Student
     @State private var selectedLesson: Lesson?
+    @State private var showBirthDatePicker = false
+    @State private var showTheoryDatePicker = false
 
     var body: some View {
         Form {
             Section("Leerling") {
                 TextField("Adres", text: $student.address)
-                DatePicker(
-                    "Geboortedatum",
-                    selection: Binding(
-                        get: { parseBirthDate(student.birthDate) ?? defaultBirthDate },
-                        set: { student.birthDate = formatBirthDate($0) }
-                    ),
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.wheel)
+                Button {
+                    showBirthDatePicker = true
+                } label: {
+                    HStack {
+                        Text("Geboortedatum")
+                        Spacer()
+                        Text(student.birthDate.isEmpty ? "Kies datum" : student.birthDate)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 TextField("Telefoon", text: $student.phone)
                 TextField("E-mail", text: $student.email)
                 TextField("Ophaaladres", text: $student.pickupAddress)
@@ -122,23 +125,16 @@ struct StudentDetailView: View {
                     ForEach(TheoryStatus.allCases) { Text($0.rawValue).tag($0) }
                 }
                 if student.theoryStatus == .gehaald || student.theoryStatus == .verlopen || student.theoryPassedDate != nil {
-                    DatePicker(
-                        "Theorie behaald op",
-                        selection: Binding(
-                            get: { student.theoryPassedDate ?? Date() },
-                            set: { newDate in
-                                student.theoryPassedDate = newDate
-                                if let expiryDate = Calendar.current.date(byAdding: .year, value: 2, to: newDate),
-                                   expiryDate <= Date() {
-                                    student.theoryStatus = .verlopen
-                                } else if student.theoryStatus == .verlopen {
-                                    student.theoryStatus = .gehaald
-                                }
-                            }
-                        ),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.wheel)
+                    Button {
+                        showTheoryDatePicker = true
+                    } label: {
+                        HStack {
+                            Text("Theorie behaald op")
+                            Spacer()
+                            Text(student.theoryPassedDate.map(formatBirthDate) ?? "Kies datum")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     if let expiryDate = theoryExpiryDate {
                         Text("Verloopt op: \(formatDutchDate(expiryDate))")
                             .foregroundStyle(expiryDate <= Date() ? .red : .secondary)
@@ -218,6 +214,32 @@ struct StudentDetailView: View {
         .sheet(item: $selectedLesson) { lesson in
             LessonDetailView(lesson: lesson)
         }
+        .sheet(isPresented: $showBirthDatePicker) {
+            DateWheelSheet(
+                title: "Geboortedatum",
+                date: Binding(
+                    get: { parseBirthDate(student.birthDate) ?? defaultBirthDate },
+                    set: { student.birthDate = formatBirthDate($0) }
+                )
+            )
+        }
+        .sheet(isPresented: $showTheoryDatePicker) {
+            DateWheelSheet(
+                title: "Theorie behaald op",
+                date: Binding(
+                    get: { student.theoryPassedDate ?? Date() },
+                    set: { newDate in
+                        student.theoryPassedDate = newDate
+                        if let expiryDate = Calendar.current.date(byAdding: .year, value: 2, to: newDate),
+                           expiryDate <= Date() {
+                            student.theoryStatus = .verlopen
+                        } else if student.theoryStatus == .verlopen {
+                            student.theoryStatus = .gehaald
+                        }
+                    }
+                )
+            )
+        }
         .onDisappear {
             store.updateStudent(student)
         }
@@ -251,14 +273,25 @@ struct StudentFormView: View {
     @State private var theoryStatus: TheoryStatus = .nietGestart
     @State private var theoryPassedDate = Date()
     @State private var notes = ""
+    @State private var showBirthDatePicker = false
+    @State private var showTheoryDatePicker = false
+    @State private var showMissingFields = false
 
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Naam", text: $name)
                 TextField("Adres", text: $address)
-                DatePicker("Geboortedatum", selection: $birthDate, displayedComponents: .date)
-                    .datePickerStyle(.wheel)
+                Button {
+                    showBirthDatePicker = true
+                } label: {
+                    HStack {
+                        Text("Geboortedatum")
+                        Spacer()
+                        Text(formatBirthDate(birthDate))
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 TextField("Telefoon", text: $phone)
                 TextField("E-mail", text: $email)
                 TextField("Ophaaladres", text: $pickupAddress)
@@ -270,47 +303,102 @@ struct StudentFormView: View {
                         ForEach(TheoryStatus.allCases) { Text($0.rawValue).tag($0) }
                     }
                     if theoryStatus == .gehaald || theoryStatus == .verlopen {
-                        DatePicker("Theorie behaald op", selection: $theoryPassedDate, displayedComponents: .date)
-                            .datePickerStyle(.wheel)
+                        Button {
+                            showTheoryDatePicker = true
+                        } label: {
+                            HStack {
+                                Text("Theorie behaald op")
+                                Spacer()
+                                Text(formatBirthDate(theoryPassedDate))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
 
                 Section {
                     Button("Bewaar leerling") {
-                        store.addStudent(Student(
-                            name: name,
-                            address: address,
-                            birthDate: formatBirthDate(birthDate),
-                            phone: phone,
-                            email: email,
-                            status: .actief,
-                            healthStatus: .nietGestart,
-                            theoryStatus: theoryStatus,
-                            theoryPassedDate: theoryStatus == .gehaald || theoryStatus == .verlopen ? theoryPassedDate : nil,
-                            pickupAddress: pickupAddress,
-                            schoolLocation: schoolLocation,
-                            workLocation: workLocation,
-                            notes: notes
-                        ))
-                        dismiss()
+                        saveStudent()
                     }
-                    .disabled(!isFormComplete)
 
                     Button("Annuleer") { dismiss() }
                 }
             }
             .navigationTitle("Nieuwe leerling")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuleer") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Bewaar") { saveStudent() }
+                }
+            }
+            .sheet(isPresented: $showBirthDatePicker) {
+                DateWheelSheet(title: "Geboortedatum", date: $birthDate)
+            }
+            .sheet(isPresented: $showTheoryDatePicker) {
+                DateWheelSheet(title: "Theorie behaald op", date: $theoryPassedDate)
+            }
+            .alert("Nog niet alles is ingevuld", isPresented: $showMissingFields) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Vul nog in: \(missingFields.joined(separator: ", "))")
+            }
         }
     }
 
-    private var isFormComplete: Bool {
+    private var missingFields: [String] {
         [
-            name,
-            address,
-            phone,
-            email,
-            pickupAddress,
-            notes
-        ].allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            ("Naam", name),
+            ("Adres", address),
+            ("Telefoon", phone),
+            ("E-mail", email),
+            ("Ophaaladres", pickupAddress)
+        ]
+        .filter { $0.1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        .map { $0.0 }
+    }
+
+    private func saveStudent() {
+        guard missingFields.isEmpty else {
+            showMissingFields = true
+            return
+        }
+        store.addStudent(Student(
+            name: name,
+            address: address,
+            birthDate: formatBirthDate(birthDate),
+            phone: phone,
+            email: email,
+            status: .actief,
+            healthStatus: .nietGestart,
+            theoryStatus: theoryStatus,
+            theoryPassedDate: theoryStatus == .gehaald || theoryStatus == .verlopen ? theoryPassedDate : nil,
+            pickupAddress: pickupAddress,
+            schoolLocation: schoolLocation,
+            workLocation: workLocation,
+            notes: notes
+        ))
+        dismiss()
+    }
+}
+
+struct DateWheelSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    @Binding var date: Date
+
+    var body: some View {
+        NavigationStack {
+            DatePicker(title, selection: $date, displayedComponents: .date)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .padding()
+                .navigationTitle(title)
+                .toolbar {
+                    Button("Klaar") { dismiss() }
+                }
+        }
+        .presentationDetents([.height(340)])
     }
 }
