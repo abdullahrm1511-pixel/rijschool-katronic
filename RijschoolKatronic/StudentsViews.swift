@@ -69,15 +69,18 @@ struct StudentRow: View {
 }
 
 struct StudentDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
     @State var student: Student
+    @State private var selectedLesson: Lesson?
 
     var body: some View {
         Form {
             Section("Leerling") {
-                Text(student.address)
-                Text(student.phone)
-                Text(student.email)
+                TextField("Adres", text: $student.address)
+                TextField("Telefoon", text: $student.phone)
+                TextField("E-mail", text: $student.email)
+                TextField("Ophaaladres", text: $student.pickupAddress)
                 Text("Leeftijd: \(age(from: student.birthDate))")
             }
 
@@ -94,14 +97,78 @@ struct StudentDetailView: View {
             }
 
             Section("Notitie") {
-                Text(student.notes.isEmpty ? "-" : student.notes)
+                TextField("Notitie", text: $student.notes, axis: .vertical)
+                    .lineLimit(3...6)
+            }
+
+            Section("Openstaand") {
+                let lessonPayments = store.lessons(for: student).filter { $0.kind == .lesson }
+                let totalAmount = lessonPayments.reduce(0) { $0 + $1.amount }
+                let paidAmount = lessonPayments.reduce(0) { $0 + $1.paidAmount }
+                Text("EUR \(store.outstandingAmount(for: student), specifier: "%.2f")")
+                    .font(.title3.bold())
+                    .foregroundStyle(store.outstandingAmount(for: student) > 0 ? .red : .green)
+                Text("Totaal EUR \(totalAmount, specifier: "%.2f") - betaald EUR \(paidAmount, specifier: "%.2f")")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Totaal onderdelen") {
+                let counts = store.treatedPartCounts(for: student)
+                if counts.isEmpty {
+                    Text("Nog geen behandelde onderdelen")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(counts) { item in
+                        HStack {
+                            Text(item.part.title)
+                            Spacer()
+                            Text("\(item.count)x")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            Section("Alle lessen") {
+                let lessons = store.lessons(for: student)
+                if lessons.isEmpty {
+                    Text("Nog geen lessen")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(lessons) { lesson in
+                        Button {
+                            selectedLesson = lesson
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(formatDutchDate(lesson.date)) - \(lesson.startTime)-\(lesson.endTime)")
+                                    .foregroundStyle(.primary)
+                                Text(lesson.kind == .exam ? "Examen" : "Les - EUR \(lesson.amount, specifier: "%.2f") - betaald EUR \(lesson.paidAmount, specifier: "%.2f")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Button("Bewaar leerling") {
+                    store.updateStudent(student)
+                }
+                Button(role: .destructive) {
+                    store.deleteStudent(student)
+                    dismiss()
+                } label: {
+                    Text("Verwijder leerling")
+                }
             }
         }
         .navigationTitle(student.name)
-        .toolbar {
-            Button("Bewaar") {
-                store.updateStudent(student)
-            }
+        .sheet(item: $selectedLesson) { lesson in
+            LessonDetailView(lesson: lesson)
+        }
+        .onDisappear {
+            store.updateStudent(student)
         }
     }
 }
@@ -128,14 +195,9 @@ struct StudentFormView: View {
                 TextField("E-mail", text: $email)
                 TextField("Ophaaladres", text: $pickupAddress)
                 TextField("Notitie", text: $notes, axis: .vertical)
-            }
-            .navigationTitle("Nieuwe leerling")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuleer") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Bewaar") {
+
+                Section {
+                    Button("Bewaar leerling") {
                         store.addStudent(Student(
                             name: name,
                             address: address,
@@ -151,8 +213,11 @@ struct StudentFormView: View {
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                    Button("Annuleer") { dismiss() }
                 }
             }
+            .navigationTitle("Nieuwe leerling")
         }
     }
 }

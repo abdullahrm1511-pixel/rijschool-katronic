@@ -7,9 +7,11 @@ struct BookingSheet: View {
     let date: Date
     let startTime: String
     let endTime: String
+    let initialDoubleBlock: Bool
 
     @State private var selectedStudentId: UUID?
     @State private var mode = 0
+    @State private var doubleBlock = false
 
     var body: some View {
         NavigationStack {
@@ -27,8 +29,21 @@ struct BookingSheet: View {
                         Text(student.name).tag(UUID?.some(student.id))
                     }
                 }
+
+                if mode != 2 {
+                    Toggle("Dubbel blok", isOn: $doubleBlock)
+                }
+
+                if mode == 1 {
+                    Text("Maakt 24 wekelijkse lessen op dezelfde dag en tijd.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .navigationTitle("\(startTime) - \(endTime)")
+            .navigationTitle("\(startTime) - \(actualEndTime)")
+            .onAppear {
+                doubleBlock = initialDoubleBlock
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuleer") { dismiss() }
@@ -41,7 +56,8 @@ struct BookingSheet: View {
                                 studentId: selectedStudentId,
                                 startDate: date,
                                 startTime: startTime,
-                                endTime: endTime
+                                endTime: actualEndTime,
+                                amount: lessonAmount
                             )
                         } else {
                             store.addLesson(Lesson(
@@ -49,9 +65,9 @@ struct BookingSheet: View {
                                 kind: mode == 2 ? .exam : .lesson,
                                 date: date,
                                 startTime: startTime,
-                                endTime: endTime,
+                                endTime: mode == 2 ? endTime : actualEndTime,
                                 note: "",
-                                amount: mode == 2 ? 0 : store.data.settings.defaultLessonAmount,
+                                amount: mode == 2 ? 0 : lessonAmount,
                                 paid: mode == 2
                             ))
                         }
@@ -62,54 +78,117 @@ struct BookingSheet: View {
             }
         }
     }
+
+    private var actualEndTime: String {
+        guard doubleBlock, mode != 2 else { return endTime }
+        return makeTime(parseTime(startTime) + (store.data.settings.lessonMinutes * 2))
+    }
+
+    private var lessonAmount: Double {
+        doubleBlock ? store.data.settings.defaultLessonAmount * 2 : store.data.settings.defaultLessonAmount
+    }
 }
 
 struct LessonDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
     @State var lesson: Lesson
+    @State private var tab = 0
+    @State private var savedMessage = false
 
     var body: some View {
         NavigationStack {
             Form {
-                Section(lesson.kind == .exam ? "Examen" : "Les") {
-                    if let student = store.student(for: lesson) {
-                        Text(student.name)
+                Picker("Tab", selection: $tab) {
+                    Text("Les").tag(0)
+                    Text("Onderdelen").tag(1)
+                }
+                .pickerStyle(.segmented)
+
+                if tab == 0 {
+                    Section(lesson.kind == .exam ? "Examen" : "Les") {
+                        if let student = store.student(for: lesson) {
+                            Text(student.name)
+                        }
+                        Text("\(formatDutchDate(lesson.date)) - \(lesson.startTime)-\(lesson.endTime)")
                     }
-                    Text("\(formatDutchDate(lesson.date)) · \(lesson.startTime)-\(lesson.endTime)")
-                }
 
-                Section("Notitie") {
-                    TextField("Notitie", text: $lesson.note, axis: .vertical)
-                }
-
-                if lesson.kind == .lesson {
-                    Section("Betaling") {
-                        TextField("Bedrag", value: $lesson.amount, format: .number)
-                            .keyboardType(.decimalPad)
-                        Toggle("Betaald", isOn: $lesson.paid)
+                    Section("Notitie") {
+                        TextField("Notitie", text: $lesson.note, axis: .vertical)
+                            .lineLimit(3...6)
                     }
-                }
 
-                Button(role: .destructive) {
-                    store.deleteLesson(lesson)
-                    dismiss()
-                } label: {
-                    Text(lesson.kind == .exam ? "Examen verwijderen" : "Les verwijderen")
+                    if lesson.kind == .lesson {
+                        Section("Betaling") {
+                            TextField("Lesprijs", value: $lesson.amount, format: .number)
+                                .keyboardType(.decimalPad)
+                            TextField("Betaald bedrag", value: $lesson.paidAmount, format: .number)
+                                .keyboardType(.decimalPad)
+                            Text("Open voor deze les: EUR \(max(0, lesson.remainingAmount), specifier: "%.2f")")
+                                .foregroundStyle(lesson.remainingAmount > 0 ? .red : .green)
+                            Button("Zet op volledig betaald") {
+                                lesson.paidAmount = lesson.amount
+                                lesson.paid = true
+                            }
+                        }
+                    }
+
+                    if savedMessage {
+                        Section {
+                            Text("Opgeslagen")
+                                .foregroundStyle(.green)
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        store.deleteLesson(lesson)
+                        dismiss()
+                    } label: {
+                        Text(lesson.kind == .exam ? "Examen verwijderen" : "Les verwijderen")
+                    }
+                } else {
+                    Section("Behandelde onderdelen") {
+                        ForEach(instructionParts) { part in
+                            Toggle(part.title, isOn: Binding(
+                                get: { lesson.treatedPartIds.contains(part.id) },
+                                set: { isOn in
+                                    if isOn {
+                                        if !lesson.treatedPartIds.contains(part.id) {
+                                            lesson.treatedPartIds.append(part.id)
+                                        }
+                                    } else {
+                                        lesson.treatedPartIds.removeAll { $0 == part.id }
+                                    }
+                                    lesson.treatedPartIds.sort()
+                                }
+                            ))
+                        }
+                    }
                 }
             }
             .navigationTitle(lesson.kind == .exam ? "Examen" : "Les")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Sluit") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Bewaar") {
-                        store.updateLesson(lesson)
+                    Button("Sluit") {
+                        saveLesson()
                         dismiss()
                     }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Bewaar") {
+                        saveLesson()
+                    }
+                }
+            }
+            .onDisappear {
+                saveLesson()
             }
         }
+    }
+
+    private func saveLesson() {
+        lesson.paid = lesson.kind == .exam || lesson.paidAmount >= lesson.amount
+        store.updateLesson(lesson)
+        savedMessage = true
     }
 }

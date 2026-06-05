@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var store: AppStore
+
     var body: some View {
         TabView {
             AgendaView()
@@ -12,7 +14,30 @@ struct ContentView: View {
             SettingsView()
                 .tabItem { Label("Instellingen", systemImage: "gearshape") }
         }
-        .tint(.blue)
+        .tint(accentColor)
+        .preferredColorScheme(colorScheme)
+    }
+
+    private var accentColor: Color {
+        switch store.data.settings.theme {
+        case .donker:
+            return .blue
+        case .blauw:
+            return .cyan
+        case .licht:
+            return .orange
+        }
+    }
+
+    private var colorScheme: ColorScheme? {
+        switch store.data.settings.theme {
+        case .donker:
+            return .dark
+        case .licht:
+            return .light
+        case .blauw:
+            return nil
+        }
     }
 }
 
@@ -20,6 +45,7 @@ struct AgendaView: View {
     @EnvironmentObject private var store: AppStore
     @State private var selectedDate = Date()
     @State private var bookingSlot: (String, String)?
+    @State private var bookingDoubleBlock = false
     @State private var selectedLesson: Lesson?
 
     var body: some View {
@@ -35,18 +61,32 @@ struct AgendaView: View {
                     examBanner
 
                     ForEach(timeSlots, id: \.0) { slot in
-                        let lesson = store.lessons(on: selectedDate).first { $0.startTime == slot.0 }
-                        AgendaRow(
-                            startTime: slot.0,
-                            endTime: slot.1,
-                            lesson: lesson,
-                            student: lesson.flatMap { store.student(for: $0) }
-                        )
-                        .onTapGesture {
-                            if let lesson {
-                                selectedLesson = lesson
-                            } else {
-                                bookingSlot = slot
+                        let dayLessons = store.lessons(on: selectedDate)
+                        let lesson = dayLessons.first { $0.startTime == slot.0 }
+                        let covered = lesson == nil && dayLessons.contains {
+                            parseTime($0.startTime) < parseTime(slot.0) && parseTime($0.endTime) > parseTime(slot.0)
+                        }
+                        if !covered {
+                            AgendaRow(
+                                startTime: slot.0,
+                                endTime: lesson?.endTime ?? slot.1,
+                                lesson: lesson,
+                                student: lesson.flatMap { store.student(for: $0) },
+                                span: lesson.map(slotSpan(for:)) ?? 1
+                            )
+                            .onTapGesture {
+                                if let lesson {
+                                    selectedLesson = lesson
+                                } else {
+                                    bookingDoubleBlock = false
+                                    bookingSlot = slot
+                                }
+                            }
+                            .onLongPressGesture {
+                                if lesson == nil {
+                                    bookingDoubleBlock = true
+                                    bookingSlot = slot
+                                }
                             }
                         }
                     }
@@ -76,7 +116,12 @@ struct AgendaView: View {
                 set: { if !$0 { bookingSlot = nil } }
             )) {
                 if let bookingSlot {
-                    BookingSheet(date: selectedDate, startTime: bookingSlot.0, endTime: bookingSlot.1)
+                    BookingSheet(
+                        date: selectedDate,
+                        startTime: bookingSlot.0,
+                        endTime: bookingSlot.1,
+                        initialDoubleBlock: bookingDoubleBlock
+                    )
                 }
             }
         }
@@ -88,6 +133,12 @@ struct AgendaView: View {
             end: store.data.settings.dayEndTime,
             minutes: store.data.settings.lessonMinutes
         )
+    }
+
+    private func slotSpan(for lesson: Lesson) -> Int {
+        let duration = parseTime(lesson.endTime) - parseTime(lesson.startTime)
+        guard duration > store.data.settings.lessonMinutes else { return 1 }
+        return max(1, Int(ceil(Double(duration) / Double(store.data.settings.lessonMinutes))))
     }
 
     private var weekStrip: some View {
@@ -135,7 +186,7 @@ struct AgendaView: View {
                     .font(.headline)
                     .foregroundStyle(.orange)
                 ForEach(exams) { exam in
-                    Text("\(exam.startTime) · \(store.student(for: exam)?.name ?? "Leerling")")
+                    Text("\(exam.startTime) - \(store.student(for: exam)?.name ?? "Leerling")")
                         .font(.subheadline.bold())
                 }
             }
@@ -152,6 +203,7 @@ struct AgendaRow: View {
     let endTime: String
     let lesson: Lesson?
     let student: Student?
+    let span: Int
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -166,18 +218,18 @@ struct AgendaRow: View {
                     HStack {
                         Text(student.name).font(.headline)
                         Spacer()
-                        Text(lesson.kind == .exam ? "Examen" : lesson.paid ? "Betaald" : "Open")
+                        Text(lesson.kind == .exam ? "Examen" : lesson.remainingAmount <= 0 ? "Betaald" : "Open")
                             .font(.caption.bold())
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(lesson.kind == .exam ? Color.orange : lesson.paid ? Color.green : Color.red)
+                            .background(lesson.kind == .exam ? Color.orange : lesson.remainingAmount <= 0 ? Color.green : Color.red)
                             .clipShape(Capsule())
                     }
                     Text(lesson.kind == .exam ? "Examen ingepland" : student.phone)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     if lesson.kind == .lesson {
-                        Text("EUR \(lesson.amount, specifier: "%.2f")")
+                        Text("EUR \(lesson.amount, specifier: "%.2f") - betaald EUR \(lesson.paidAmount, specifier: "%.2f")")
                             .font(.caption.bold())
                     }
                 } else {
@@ -187,6 +239,7 @@ struct AgendaRow: View {
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: CGFloat(72 * span))
             .background(lesson?.kind == .exam ? Color.orange.opacity(0.16) : Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 18))
         }

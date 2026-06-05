@@ -34,7 +34,7 @@ final class AppStore: ObservableObject {
         data.lessons.append(lesson)
     }
 
-    func addWeeklyLessons(studentId: UUID, startDate: Date, startTime: String, endTime: String) -> Int {
+    func addWeeklyLessons(studentId: UUID, startDate: Date, startTime: String, endTime: String, amount: Double) -> Int {
         let seriesId = UUID()
         var created = 0
         for week in 0..<24 {
@@ -48,7 +48,7 @@ final class AppStore: ObservableObject {
                 startTime: startTime,
                 endTime: endTime,
                 note: "",
-                amount: data.settings.defaultLessonAmount,
+                amount: amount,
                 paid: false,
                 recurringSeriesId: seriesId
             )
@@ -80,13 +80,36 @@ final class AppStore: ObservableObject {
     }
 
     func outstandingAmount(for student: Student? = nil) -> Double {
-        data.lessons
+        let lessons = data.lessons
             .filter { lesson in
-                lesson.kind == .lesson &&
-                !lesson.paid &&
-                (student == nil || lesson.studentId == student?.id)
+                lesson.kind == .lesson && (student == nil || lesson.studentId == student?.id)
             }
-            .reduce(0) { $0 + $1.amount }
+        let total = lessons.reduce(0) { $0 + $1.amount }
+        let paid = lessons.reduce(0) { $0 + $1.paidAmount }
+        return max(0, total - paid)
+    }
+
+    func lessons(for student: Student) -> [Lesson] {
+        data.lessons
+            .filter { $0.studentId == student.id }
+            .sorted {
+                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
+                    return $0.startTime < $1.startTime
+                }
+                return $0.date > $1.date
+            }
+    }
+
+    func treatedPartCounts(for student: Student) -> [TreatedPartCount] {
+        let counts = lessons(for: student)
+            .flatMap(\.treatedPartIds)
+            .reduce(into: [Int: Int]()) { result, partId in
+                result[partId, default: 0] += 1
+            }
+        return instructionParts.compactMap { part in
+            guard let count = counts[part.id], count > 0 else { return nil }
+            return TreatedPartCount(part: part, count: count)
+        }
     }
 
     func updateSettings(_ settings: AppSettings) {
