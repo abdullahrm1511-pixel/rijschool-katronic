@@ -45,7 +45,11 @@ struct AgendaView: View {
     @EnvironmentObject private var store: AppStore
     @State private var selectedDate = Date()
     @State private var bookingSlot: (String, String)?
-    @State private var bookingDoubleBlock = false
+    @State private var bookingBlockCount = 1
+    @State private var bookingMode = 0
+    @State private var pendingBookingSlot: (String, String)?
+    @State private var pendingBlockCount = 1
+    @State private var showOverlapWarning = false
     @State private var selectedLesson: Lesson?
     @State private var showExamOverview = false
 
@@ -55,9 +59,7 @@ struct AgendaView: View {
                 VStack(spacing: 16) {
                     weekStrip
 
-                    Text(formatDutchDate(selectedDate))
-                        .font(.title2.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    dayNavigator
 
                     examBanner
 
@@ -79,14 +81,28 @@ struct AgendaView: View {
                                 if let lesson {
                                     selectedLesson = lesson
                                 } else {
-                                    bookingDoubleBlock = false
-                                    bookingSlot = slot
+                                    startBooking(slot, blockCount: 1)
                                 }
                             }
-                            .onLongPressGesture {
+                            .gesture(
+                                LongPressGesture(minimumDuration: 0.45)
+                                    .sequenced(before: DragGesture(minimumDistance: 0))
+                                    .onEnded { value in
+                                        guard lesson == nil else { return }
+                                        if case .second(true, let drag?) = value {
+                                            startBooking(slot, blockCount: blockCount(for: drag.translation.height, from: slot))
+                                        } else {
+                                            startBooking(slot, blockCount: 2)
+                                        }
+                                    }
+                            )
+                            .overlay(alignment: .bottomTrailing) {
                                 if lesson == nil {
-                                    bookingDoubleBlock = true
-                                    bookingSlot = slot
+                                    Text("Houd vast + sleep")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.trailing, 16)
+                                        .padding(.bottom, 10)
                                 }
                             }
                         }
@@ -98,6 +114,9 @@ struct AgendaView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Menu("Opties") {
+                        Button("Examen inplannen") {
+                            openBooking(defaultBookingSlot, blockCount: 1, mode: 2)
+                        }
                         Button("Alle examens") {
                             showExamOverview = true
                         }
@@ -110,11 +129,13 @@ struct AgendaView: View {
             .gesture(
                 DragGesture(minimumDistance: 30)
                     .onEnded { value in
-                        if value.translation.width < -70 {
-                            selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-                        }
-                        if value.translation.width > 70 {
-                            selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
+                        if abs(value.translation.width) > abs(value.translation.height) {
+                            if value.translation.width < -70 {
+                                changeDay(by: 1)
+                            }
+                            if value.translation.width > 70 {
+                                changeDay(by: -1)
+                            }
                         }
                     }
             )
@@ -133,9 +154,20 @@ struct AgendaView: View {
                         date: selectedDate,
                         startTime: bookingSlot.0,
                         endTime: bookingSlot.1,
-                        initialDoubleBlock: bookingDoubleBlock
+                        initialBlockCount: bookingBlockCount,
+                        initialMode: bookingMode
                     )
                 }
+            }
+            .alert("Deze blokken raken een bestaande les", isPresented: $showOverlapWarning) {
+                Button("Annuleer", role: .cancel) { }
+                Button("Toch openen") {
+                    if let pendingBookingSlot {
+                        openBooking(pendingBookingSlot, blockCount: pendingBlockCount, mode: 0)
+                    }
+                }
+            } message: {
+                Text("Je selectie loopt over een tijd waar al een les of examen staat. Controleer even of dit geen ongelukje is.")
             }
         }
     }
@@ -148,10 +180,89 @@ struct AgendaView: View {
         )
     }
 
+    private var defaultBookingSlot: (String, String) {
+        (
+            store.data.settings.dayStartTime,
+            makeTime(parseTime(store.data.settings.dayStartTime) + store.data.settings.lessonMinutes)
+        )
+    }
+
     private func slotSpan(for lesson: Lesson) -> Int {
         let duration = parseTime(lesson.endTime) - parseTime(lesson.startTime)
         guard duration > store.data.settings.lessonMinutes else { return 1 }
         return max(1, Int(ceil(Double(duration) / Double(store.data.settings.lessonMinutes))))
+    }
+
+    private func blockCount(for dragHeight: CGFloat, from slot: (String, String)) -> Int {
+        let rowHeight: CGFloat = 88
+        let draggedBlocks = Int(max(0, dragHeight) / rowHeight) + 1
+        return min(max(1, draggedBlocks), maxBlocks(from: slot))
+    }
+
+    private func maxBlocks(from slot: (String, String)) -> Int {
+        guard let index = timeSlots.firstIndex(where: { $0.0 == slot.0 }) else { return 1 }
+        return max(1, timeSlots.count - index)
+    }
+
+    private func startBooking(_ slot: (String, String), blockCount: Int) {
+        let count = min(max(1, blockCount), maxBlocks(from: slot))
+        if count > 1 && overlapsExistingLesson(startTime: slot.0, blockCount: count) {
+            pendingBookingSlot = slot
+            pendingBlockCount = count
+            showOverlapWarning = true
+        } else {
+            openBooking(slot, blockCount: count, mode: 0)
+        }
+    }
+
+    private func openBooking(_ slot: (String, String), blockCount: Int, mode: Int) {
+        bookingBlockCount = blockCount
+        bookingMode = mode
+        bookingSlot = slot
+    }
+
+    private func overlapsExistingLesson(startTime: String, blockCount: Int) -> Bool {
+        let start = parseTime(startTime)
+        let end = start + (store.data.settings.lessonMinutes * blockCount)
+        return store.lessons(on: selectedDate).contains { lesson in
+            parseTime(lesson.startTime) < end && parseTime(lesson.endTime) > start
+        }
+    }
+
+    private var dayNavigator: some View {
+        HStack(spacing: 12) {
+            Button {
+                changeDay(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.headline)
+                    .frame(width: 44, height: 44)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(Circle())
+            }
+
+            Text(formatDutchDate(selectedDate))
+                .font(.title3.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+
+            Button {
+                changeDay(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .frame(width: 44, height: 44)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(Circle())
+            }
+        }
+    }
+
+    private func changeDay(by days: Int) {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            selectedDate = Calendar.current.date(byAdding: .day, value: days, to: selectedDate) ?? selectedDate
+        }
     }
 
     private var weekStrip: some View {
@@ -161,7 +272,9 @@ struct AgendaView: View {
         return HStack {
             ForEach(days, id: \.self) { day in
                 Button {
-                    selectedDate = day
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedDate = day
+                    }
                 } label: {
                     VStack {
                         Text(dayLetter(day))
@@ -173,9 +286,10 @@ struct AgendaView: View {
                             .background(Calendar.current.isDate(day, inSameDayAs: selectedDate) ? Color.red : Color.clear)
                             .clipShape(Circle())
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                Spacer(minLength: 0)
             }
         }
     }

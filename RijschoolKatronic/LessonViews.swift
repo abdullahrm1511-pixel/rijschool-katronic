@@ -7,11 +7,15 @@ struct BookingSheet: View {
     let date: Date
     let startTime: String
     let endTime: String
-    let initialDoubleBlock: Bool
+    let initialBlockCount: Int
+    let initialMode: Int
 
     @State private var selectedStudentId: UUID?
     @State private var mode = 0
-    @State private var doubleBlock = false
+    @State private var blockCount = 1
+    @State private var plannedDate = Date()
+    @State private var plannedStartTime = Date()
+    @State private var plannedEndTime = Date()
 
     var body: some View {
         NavigationStack {
@@ -30,8 +34,17 @@ struct BookingSheet: View {
                     }
                 }
 
+                Section("Datum en tijd") {
+                    DatePicker("Datum", selection: $plannedDate, displayedComponents: .date)
+                        .datePickerStyle(.wheel)
+                    DatePicker("Starttijd", selection: $plannedStartTime, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                    DatePicker("Eindtijd", selection: $plannedEndTime, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                }
+
                 if mode != 2 {
-                    Toggle("Dubbel blok", isOn: $doubleBlock)
+                    Stepper("Aantal blokken: \(blockCount)", value: $blockCount, in: 1...6)
                 }
 
                 if mode == 1 {
@@ -40,9 +53,13 @@ struct BookingSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("\(startTime) - \(actualEndTime)")
+            .navigationTitle("\(plannedStartTimeString) - \(actualEndTime)")
             .onAppear {
-                doubleBlock = initialDoubleBlock
+                blockCount = max(1, initialBlockCount)
+                mode = initialMode
+                plannedDate = date
+                plannedStartTime = dateWithTime(date, time: startTime)
+                plannedEndTime = dateWithTime(date, time: endTime)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -54,8 +71,8 @@ struct BookingSheet: View {
                         if mode == 1 {
                             _ = store.addWeeklyLessons(
                                 studentId: selectedStudentId,
-                                startDate: date,
-                                startTime: startTime,
+                                startDate: plannedDate,
+                                startTime: plannedStartTimeString,
                                 endTime: actualEndTime,
                                 amount: lessonAmount
                             )
@@ -63,9 +80,9 @@ struct BookingSheet: View {
                             store.addLesson(Lesson(
                                 studentId: selectedStudentId,
                                 kind: mode == 2 ? .exam : .lesson,
-                                date: date,
-                                startTime: startTime,
-                                endTime: mode == 2 ? endTime : actualEndTime,
+                                date: plannedDate,
+                                startTime: plannedStartTimeString,
+                                endTime: mode == 2 ? plannedEndTimeString : actualEndTime,
                                 note: "",
                                 amount: mode == 2 ? 0 : lessonAmount,
                                 paid: mode == 2
@@ -80,12 +97,20 @@ struct BookingSheet: View {
     }
 
     private var actualEndTime: String {
-        guard doubleBlock, mode != 2 else { return endTime }
-        return makeTime(parseTime(startTime) + (store.data.settings.lessonMinutes * 2))
+        guard mode != 2 else { return plannedEndTimeString }
+        return makeTime(parseTime(plannedStartTimeString) + (store.data.settings.lessonMinutes * blockCount))
     }
 
     private var lessonAmount: Double {
-        doubleBlock ? store.data.settings.defaultLessonAmount * 2 : store.data.settings.defaultLessonAmount
+        store.data.settings.defaultLessonAmount * Double(blockCount)
+    }
+
+    private var plannedStartTimeString: String {
+        timeString(from: plannedStartTime)
+    }
+
+    private var plannedEndTimeString: String {
+        timeString(from: plannedEndTime)
     }
 }
 
@@ -113,6 +138,17 @@ struct LessonDetailView: View {
                             Text(student.name)
                         }
                         Text("\(formatDutchDate(lesson.date)) - \(lesson.startTime)-\(lesson.endTime)")
+                    }
+
+                    if let student = store.student(for: lesson) {
+                        Section("Leerlinggegevens") {
+                            LessonStudentInfoRow(title: "Adres", value: student.address)
+                            LessonStudentInfoRow(title: "Ophaaladres", value: student.pickupAddress)
+                            LessonStudentInfoRow(title: "Schoollocatie", value: student.schoolLocation)
+                            LessonStudentInfoRow(title: "Werklocatie", value: student.workLocation)
+                            LessonStudentInfoRow(title: "Telefoon", value: student.phone)
+                            LessonStudentInfoRow(title: "E-mail", value: student.email)
+                        }
                     }
 
                     Section("Notitie") {
@@ -211,6 +247,22 @@ struct LessonDetailView: View {
     private func saveLesson() {
         store.updateLesson(normalizedLesson)
         savedMessage = true
+    }
+}
+
+struct LessonStudentInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(value)
+            }
+        }
     }
 }
 

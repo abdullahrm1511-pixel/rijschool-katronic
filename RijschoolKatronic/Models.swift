@@ -83,9 +83,83 @@ struct Student: Identifiable, Codable, Equatable {
     var status: StudentStatus
     var healthStatus: HealthStatus
     var theoryStatus: TheoryStatus
+    var theoryPassedDate: Date?
     var pickupAddress: String
+    var schoolLocation: String
+    var workLocation: String
     var notes: String
     var createdAt = Date()
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        address: String,
+        birthDate: String,
+        phone: String,
+        email: String,
+        status: StudentStatus,
+        healthStatus: HealthStatus,
+        theoryStatus: TheoryStatus,
+        theoryPassedDate: Date? = nil,
+        pickupAddress: String,
+        schoolLocation: String = "",
+        workLocation: String = "",
+        notes: String,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.address = address
+        self.birthDate = birthDate
+        self.phone = phone
+        self.email = email
+        self.status = status
+        self.healthStatus = healthStatus
+        self.theoryStatus = theoryStatus
+        self.theoryPassedDate = theoryPassedDate
+        self.pickupAddress = pickupAddress
+        self.schoolLocation = schoolLocation
+        self.workLocation = workLocation
+        self.notes = notes
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case address
+        case birthDate
+        case phone
+        case email
+        case status
+        case healthStatus
+        case theoryStatus
+        case theoryPassedDate
+        case pickupAddress
+        case schoolLocation
+        case workLocation
+        case notes
+        case createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        address = try container.decodeIfPresent(String.self, forKey: .address) ?? ""
+        birthDate = try container.decodeIfPresent(String.self, forKey: .birthDate) ?? ""
+        phone = try container.decodeIfPresent(String.self, forKey: .phone) ?? ""
+        email = try container.decodeIfPresent(String.self, forKey: .email) ?? ""
+        status = try container.decodeIfPresent(StudentStatus.self, forKey: .status) ?? .actief
+        healthStatus = try container.decodeIfPresent(HealthStatus.self, forKey: .healthStatus) ?? .nietGestart
+        theoryStatus = try container.decodeIfPresent(TheoryStatus.self, forKey: .theoryStatus) ?? .nietGestart
+        theoryPassedDate = try container.decodeIfPresent(Date.self, forKey: .theoryPassedDate)
+        pickupAddress = try container.decodeIfPresent(String.self, forKey: .pickupAddress) ?? ""
+        schoolLocation = try container.decodeIfPresent(String.self, forKey: .schoolLocation) ?? ""
+        workLocation = try container.decodeIfPresent(String.self, forKey: .workLocation) ?? ""
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
 }
 
 struct Lesson: Identifiable, Codable, Equatable {

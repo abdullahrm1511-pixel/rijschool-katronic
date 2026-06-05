@@ -5,6 +5,10 @@ struct SettingsView: View {
     @State private var settings = AppSettings()
     @State private var lessonSearch = ""
     @State private var selectedLesson: Lesson?
+    @State private var exportStartDate = Date()
+    @State private var exportEndDate = Date()
+    @State private var exportFileURL: URL?
+    @State private var exportMessage = ""
 
     private var fixedLessonSeries: [FixedLessonSeries] {
         let grouped = Dictionary(grouping: store.data.lessons.filter { $0.recurringSeriesId != nil }) { lesson in
@@ -157,6 +161,24 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Excel export") {
+                    DatePicker("Vanaf", selection: $exportStartDate, displayedComponents: .date)
+                    DatePicker("Tot en met", selection: $exportEndDate, displayedComponents: .date)
+                    Button("Maak export") {
+                        exportFileURL = makeLessonExport()
+                        exportMessage = exportFileURL == nil ? "Export maken is niet gelukt" : "Export staat klaar"
+                    }
+                    if !exportMessage.isEmpty {
+                        Text(exportMessage)
+                            .foregroundStyle(exportFileURL == nil ? .red : .green)
+                    }
+                    if let exportFileURL {
+                        ShareLink(item: exportFileURL) {
+                            Label("Deel Excel export", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+
                 Section {
                     Button("Bewaar instellingen") {
                         store.updateSettings(settings)
@@ -174,6 +196,67 @@ struct SettingsView: View {
                 LessonDetailView(lesson: lesson)
             }
         }
+    }
+
+    private func makeLessonExport() -> URL? {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: min(exportStartDate, exportEndDate))
+        let endDay = calendar.startOfDay(for: max(exportStartDate, exportEndDate))
+        let end = calendar.date(byAdding: DateComponents(day: 1, second: -1), to: endDay) ?? endDay
+        let lessons = store.data.lessons
+            .filter { $0.date >= start && $0.date <= end }
+            .sorted {
+                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
+                    return $0.startTime < $1.startTime
+                }
+                return $0.date < $1.date
+            }
+
+        var rows = [
+            ["Datum", "Start", "Einde", "Leerling", "Ophaaladres", "Schoollocatie", "Werklocatie", "Type", "Lesprijs", "Betaald", "Open", "Notitie", "Onderdelen"]
+        ]
+        for lesson in lessons {
+            let student = store.student(for: lesson)
+            let parts = instructionParts
+                .filter { lesson.treatedPartIds.contains($0.id) }
+                .map(\.title)
+                .joined(separator: ", ")
+            rows.append([
+                formatDutchDate(lesson.date),
+                lesson.startTime,
+                lesson.endTime,
+                student?.name ?? "Leerling",
+                student?.pickupAddress ?? "",
+                student?.schoolLocation ?? "",
+                student?.workLocation ?? "",
+                lesson.kind == .exam ? "Examen" : "Les",
+                String(format: "%.2f", lesson.amount),
+                String(format: "%.2f", lesson.paidAmount),
+                String(format: "%.2f", max(0, lesson.remainingAmount)),
+                lesson.note,
+                parts
+            ])
+        }
+
+        let csv = rows
+            .map { $0.map(escapeCSV).joined(separator: ";") }
+            .joined(separator: "\n")
+        let fileName = "rijschool-katronic-export-\(Int(Date().timeIntervalSince1970)).csv"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        do {
+            try ("\u{FEFF}" + csv).write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private func escapeCSV(_ value: String) -> String {
+        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+        if escaped.contains(";") || escaped.contains("\n") || escaped.contains("\"") {
+            return "\"\(escaped)\""
+        }
+        return escaped
     }
 }
 

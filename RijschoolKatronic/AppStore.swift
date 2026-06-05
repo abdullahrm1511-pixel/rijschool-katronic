@@ -11,19 +11,22 @@ final class AppStore: ObservableObject {
     init() {
         if let saved = UserDefaults.standard.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode(AppData.self, from: saved) {
-            data = decoded
+            var migrated = decoded
+            migrated.students = migrated.students.map(normalizedStudent)
+            data = migrated
         } else {
             data = AppData()
         }
     }
 
     func addStudent(_ student: Student) {
-        data.students.insert(student, at: 0)
+        data.students.insert(normalizedStudent(student), at: 0)
         save()
     }
 
     func updateStudent(_ student: Student) {
-        data.students = data.students.map { $0.id == student.id ? student : $0 }
+        let updated = normalizedStudent(student)
+        data.students = data.students.map { $0.id == updated.id ? updated : $0 }
         save()
     }
 
@@ -134,6 +137,19 @@ final class AppStore: ObservableObject {
         Calendar.current.isDate(a.date, inSameDayAs: b.date) &&
         a.startTime < b.endTime &&
         a.endTime > b.startTime
+    }
+
+    private func normalizedStudent(_ student: Student) -> Student {
+        var updated = student
+        if updated.theoryStatus == .gehaald && updated.theoryPassedDate == nil {
+            updated.theoryPassedDate = Date()
+        }
+        if let passedDate = updated.theoryPassedDate,
+           let expiryDate = Calendar.current.date(byAdding: .year, value: 2, to: passedDate),
+           expiryDate <= Date() {
+            updated.theoryStatus = .verlopen
+        }
+        return updated
     }
 
     private func save() {

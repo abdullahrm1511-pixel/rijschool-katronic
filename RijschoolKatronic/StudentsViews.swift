@@ -9,7 +9,15 @@ struct StudentsView: View {
     private var filteredStudents: [Student] {
         store.data.students.filter { student in
             (showGraduated ? student.status == .geslaagd : student.status == .actief) &&
-            (query.isEmpty || [student.name, student.phone, student.email, student.address].joined(separator: " ").localizedCaseInsensitiveContains(query))
+            (query.isEmpty || [
+                student.name,
+                student.phone,
+                student.email,
+                student.address,
+                student.pickupAddress,
+                student.schoolLocation,
+                student.workLocation
+            ].joined(separator: " ").localizedCaseInsensitiveContains(query))
         }
     }
 
@@ -78,9 +86,20 @@ struct StudentDetailView: View {
         Form {
             Section("Leerling") {
                 TextField("Adres", text: $student.address)
+                DatePicker(
+                    "Geboortedatum",
+                    selection: Binding(
+                        get: { parseBirthDate(student.birthDate) ?? defaultBirthDate },
+                        set: { student.birthDate = formatBirthDate($0) }
+                    ),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.wheel)
                 TextField("Telefoon", text: $student.phone)
                 TextField("E-mail", text: $student.email)
                 TextField("Ophaaladres", text: $student.pickupAddress)
+                TextField("Schoollocatie", text: $student.schoolLocation)
+                TextField("Werklocatie", text: $student.workLocation)
                 Text("Leeftijd: \(age(from: student.birthDate))")
             }
 
@@ -91,8 +110,39 @@ struct StudentDetailView: View {
                 Picker("Gezondheid", selection: $student.healthStatus) {
                     ForEach(HealthStatus.allCases) { Text($0.rawValue).tag($0) }
                 }
-                Picker("Theorie", selection: $student.theoryStatus) {
+                Picker("Theorie", selection: Binding(
+                    get: { student.theoryStatus },
+                    set: { newStatus in
+                        student.theoryStatus = newStatus
+                        if newStatus == .gehaald && student.theoryPassedDate == nil {
+                            student.theoryPassedDate = Date()
+                        }
+                    }
+                )) {
                     ForEach(TheoryStatus.allCases) { Text($0.rawValue).tag($0) }
+                }
+                if student.theoryStatus == .gehaald || student.theoryStatus == .verlopen || student.theoryPassedDate != nil {
+                    DatePicker(
+                        "Theorie behaald op",
+                        selection: Binding(
+                            get: { student.theoryPassedDate ?? Date() },
+                            set: { newDate in
+                                student.theoryPassedDate = newDate
+                                if let expiryDate = Calendar.current.date(byAdding: .year, value: 2, to: newDate),
+                                   expiryDate <= Date() {
+                                    student.theoryStatus = .verlopen
+                                } else if student.theoryStatus == .verlopen {
+                                    student.theoryStatus = .gehaald
+                                }
+                            }
+                        ),
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.wheel)
+                    if let expiryDate = theoryExpiryDate {
+                        Text("Verloopt op: \(formatDutchDate(expiryDate))")
+                            .foregroundStyle(expiryDate <= Date() ? .red : .secondary)
+                    }
                 }
             }
 
@@ -175,6 +225,15 @@ struct StudentDetailView: View {
             store.updateStudent(updatedStudent)
         }
     }
+
+    private var defaultBirthDate: Date {
+        Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
+    }
+
+    private var theoryExpiryDate: Date? {
+        guard let passedDate = student.theoryPassedDate else { return nil }
+        return Calendar.current.date(byAdding: .year, value: 2, to: passedDate)
+    }
 }
 
 struct StudentFormView: View {
@@ -183,10 +242,14 @@ struct StudentFormView: View {
 
     @State private var name = ""
     @State private var address = ""
-    @State private var birthDate = ""
+    @State private var birthDate = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
     @State private var phone = ""
     @State private var email = ""
     @State private var pickupAddress = ""
+    @State private var schoolLocation = ""
+    @State private var workLocation = ""
+    @State private var theoryStatus: TheoryStatus = .nietGestart
+    @State private var theoryPassedDate = Date()
     @State private var notes = ""
 
     var body: some View {
@@ -194,34 +257,60 @@ struct StudentFormView: View {
             Form {
                 TextField("Naam", text: $name)
                 TextField("Adres", text: $address)
-                TextField("Geboortedatum", text: $birthDate)
+                DatePicker("Geboortedatum", selection: $birthDate, displayedComponents: .date)
+                    .datePickerStyle(.wheel)
                 TextField("Telefoon", text: $phone)
                 TextField("E-mail", text: $email)
                 TextField("Ophaaladres", text: $pickupAddress)
+                TextField("Schoollocatie", text: $schoolLocation)
+                TextField("Werklocatie", text: $workLocation)
                 TextField("Notitie", text: $notes, axis: .vertical)
+                Section("Theorie") {
+                    Picker("Theorie", selection: $theoryStatus) {
+                        ForEach(TheoryStatus.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    if theoryStatus == .gehaald || theoryStatus == .verlopen {
+                        DatePicker("Theorie behaald op", selection: $theoryPassedDate, displayedComponents: .date)
+                            .datePickerStyle(.wheel)
+                    }
+                }
 
                 Section {
                     Button("Bewaar leerling") {
                         store.addStudent(Student(
                             name: name,
                             address: address,
-                            birthDate: birthDate,
+                            birthDate: formatBirthDate(birthDate),
                             phone: phone,
                             email: email,
                             status: .actief,
                             healthStatus: .nietGestart,
-                            theoryStatus: .nietGestart,
+                            theoryStatus: theoryStatus,
+                            theoryPassedDate: theoryStatus == .gehaald || theoryStatus == .verlopen ? theoryPassedDate : nil,
                             pickupAddress: pickupAddress,
+                            schoolLocation: schoolLocation,
+                            workLocation: workLocation,
                             notes: notes
                         ))
                         dismiss()
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(!isFormComplete)
 
                     Button("Annuleer") { dismiss() }
                 }
             }
             .navigationTitle("Nieuwe leerling")
         }
+    }
+
+    private var isFormComplete: Bool {
+        [
+            name,
+            address,
+            phone,
+            email,
+            pickupAddress,
+            notes
+        ].allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 }

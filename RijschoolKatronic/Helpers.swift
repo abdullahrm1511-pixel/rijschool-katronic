@@ -42,11 +42,35 @@ func makeTimeSlots(start: String, end: String, minutes: Int) -> [(String, String
     return result
 }
 
+func dateWithTime(_ date: Date, time: String) -> Date {
+    let minutes = parseTime(time)
+    var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+    components.hour = minutes / 60
+    components.minute = minutes % 60
+    return Calendar.current.date(from: components) ?? date
+}
+
+func timeString(from date: Date) -> String {
+    let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+    return makeTime(((components.hour ?? 0) * 60) + (components.minute ?? 0))
+}
+
 func age(from birthDate: String) -> String {
+    guard let date = parseBirthDate(birthDate) else { return "" }
+    let years = Calendar.current.dateComponents([.year], from: date, to: Date()).year ?? 0
+    return "\(years)"
+}
+
+func parseBirthDate(_ value: String) -> Date? {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "nl_NL")
     formatter.dateFormat = "dd-MM-yyyy"
-    guard let date = formatter.date(from: birthDate) else { return "" }
-    let years = Calendar.current.dateComponents([.year], from: date, to: Date()).year ?? 0
-    return "\(years)"
+    return formatter.date(from: value)
+}
+
+func formatBirthDate(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "nl_NL")
+    formatter.dateFormat = "dd-MM-yyyy"
+    return formatter.string(from: date)
 }
