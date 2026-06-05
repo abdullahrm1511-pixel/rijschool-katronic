@@ -9,6 +9,7 @@ struct BookingSheet: View {
     let endTime: String
     let initialBlockCount: Int
     let initialMode: Int
+    let onShowTotalOverview: () -> Void
 
     @State private var selectedStudentId: UUID?
     @State private var mode = 0
@@ -56,6 +57,12 @@ struct BookingSheet: View {
                                 Text("EUR \(lessonAmount, specifier: "%.2f")")
                                     .foregroundStyle(.secondary)
                             }
+                        }
+                        Button {
+                            dismiss()
+                            onShowTotalOverview()
+                        } label: {
+                            Label("Totaaloverzicht", systemImage: "list.bullet.rectangle")
                         }
                     }
                 }

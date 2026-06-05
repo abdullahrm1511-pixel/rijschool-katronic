@@ -1,18 +1,28 @@
 import SwiftUI
 
+enum AppTab: Hashable {
+    case agenda
+    case students
+    case settings
+}
+
 struct ContentView: View {
     @EnvironmentObject private var store: AppStore
+    @State private var selectedTab: AppTab = .agenda
 
     var body: some View {
-        TabView {
-            AgendaView()
+        TabView(selection: $selectedTab) {
+            AgendaView(selectedTab: $selectedTab)
                 .tabItem { Label("Agenda", systemImage: "calendar") }
+                .tag(AppTab.agenda)
 
             StudentsView()
                 .tabItem { Label("Leerlingen", systemImage: "person.2") }
+                .tag(AppTab.students)
 
             SettingsView()
                 .tabItem { Label("Instellingen", systemImage: "gearshape") }
+                .tag(AppTab.settings)
         }
         .tint(accentColor)
         .preferredColorScheme(colorScheme)
@@ -43,6 +53,7 @@ struct ContentView: View {
 
 struct AgendaView: View {
     @EnvironmentObject private var store: AppStore
+    @Binding var selectedTab: AppTab
     @State private var selectedDate = Date()
     @State private var bookingSlot: (String, String)?
     @State private var bookingBlockCount = 1
@@ -155,7 +166,10 @@ struct AgendaView: View {
                         startTime: bookingSlot.0,
                         endTime: bookingSlot.1,
                         initialBlockCount: bookingBlockCount,
-                        initialMode: bookingMode
+                        initialMode: bookingMode,
+                        onShowTotalOverview: {
+                            selectedTab = .settings
+                        }
                     )
                 }
             }
