@@ -96,13 +96,25 @@ final class AppStore: ObservableObject {
     }
 
     func outstandingAmount(for student: Student? = nil) -> Double {
+        max(0, balanceAmount(for: student))
+    }
+
+    func balanceAmount(for student: Student? = nil) -> Double {
         let lessons = data.lessons
             .filter { lesson in
                 lesson.kind == .lesson && (student == nil || lesson.studentId == student?.id)
             }
         let total = lessons.reduce(0) { $0 + $1.amount }
         let paid = lessons.reduce(0) { $0 + $1.paidAmount }
-        return max(0, total - paid)
+        return total - paid
+    }
+
+    func paidAmount(for student: Student? = nil) -> Double {
+        data.lessons
+            .filter { lesson in
+                lesson.kind == .lesson && (student == nil || lesson.studentId == student?.id)
+            }
+            .reduce(0) { $0 + $1.paidAmount }
     }
 
     func lessons(for student: Student) -> [Lesson] {

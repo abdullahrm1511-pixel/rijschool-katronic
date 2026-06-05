@@ -16,6 +16,7 @@ struct BookingSheet: View {
     @State private var plannedDate = Date()
     @State private var plannedStartTime = Date()
     @State private var plannedEndTime = Date()
+    @State private var activeDatePicker: BookingDatePicker?
 
     var body: some View {
         NavigationStack {
@@ -34,17 +35,51 @@ struct BookingSheet: View {
                     }
                 }
 
-                Section("Datum en tijd") {
-                    DatePicker("Datum", selection: $plannedDate, displayedComponents: .date)
-                        .datePickerStyle(.wheel)
-                    DatePicker("Starttijd", selection: $plannedStartTime, displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.wheel)
-                    DatePicker("Eindtijd", selection: $plannedEndTime, displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.wheel)
+                if let selectedStudent {
+                    Section("Betaling leerling") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Betaald totaal")
+                            Text("EUR \(paidTotal(for: selectedStudent), specifier: "%.2f")")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(balanceTitle(for: selectedStudent))
+                            Text(balanceText(for: selectedStudent))
+                                .font(.headline)
+                                .foregroundStyle(balanceColor(for: selectedStudent))
+                        }
+                        if mode != 2 {
+                            HStack {
+                                Text("Deze planning")
+                                Spacer()
+                                Text("EUR \(lessonAmount, specifier: "%.2f")")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
 
                 if mode != 2 {
                     Stepper("Aantal blokken: \(blockCount)", value: $blockCount, in: 1...6)
+                } else {
+                    Section("Datum en tijd") {
+                        Button {
+                            activeDatePicker = .date
+                        } label: {
+                            BookingPickerRow(title: "Datum", value: formatBirthDate(plannedDate))
+                        }
+                        Button {
+                            activeDatePicker = .startTime
+                        } label: {
+                            BookingPickerRow(title: "Starttijd", value: plannedStartTimeString)
+                        }
+                        Button {
+                            activeDatePicker = .endTime
+                        } label: {
+                            BookingPickerRow(title: "Eindtijd", value: plannedEndTimeString)
+                        }
+                    }
                 }
 
                 if mode == 1 {
@@ -93,6 +128,13 @@ struct BookingSheet: View {
                     .disabled(selectedStudentId == nil)
                 }
             }
+            .sheet(item: $activeDatePicker) { picker in
+                BookingDateWheelSheet(
+                    title: picker.title,
+                    date: dateBinding(for: picker),
+                    components: picker.components
+                )
+            }
         }
     }
 
@@ -111,6 +153,108 @@ struct BookingSheet: View {
 
     private var plannedEndTimeString: String {
         timeString(from: plannedEndTime)
+    }
+
+    private var selectedStudent: Student? {
+        guard let selectedStudentId else { return nil }
+        return store.data.students.first { $0.id == selectedStudentId }
+    }
+
+    private func paidTotal(for student: Student) -> Double {
+        store.paidAmount(for: student)
+    }
+
+    private func balanceTitle(for student: Student) -> String {
+        store.balanceAmount(for: student) < 0 ? "Tegoed" : "Openstaand bedrag"
+    }
+
+    private func balanceText(for student: Student) -> String {
+        let balance = store.balanceAmount(for: student)
+        if balance < 0 {
+            return "+ EUR \(abs(balance), specifier: "%.2f")"
+        }
+        return "EUR \(balance, specifier: "%.2f")"
+    }
+
+    private func balanceColor(for student: Student) -> Color {
+        let balance = store.balanceAmount(for: student)
+        return balance < 0 ? .green : balance > 0 ? .red : .green
+    }
+
+    private func dateBinding(for picker: BookingDatePicker) -> Binding<Date> {
+        switch picker {
+        case .date:
+            return $plannedDate
+        case .startTime:
+            return $plannedStartTime
+        case .endTime:
+            return $plannedEndTime
+        }
+    }
+}
+
+private enum BookingDatePicker: Identifiable {
+    case date
+    case startTime
+    case endTime
+
+    var id: String {
+        title
+    }
+
+    var title: String {
+        switch self {
+        case .date:
+            return "Datum"
+        case .startTime:
+            return "Starttijd"
+        case .endTime:
+            return "Eindtijd"
+        }
+    }
+
+    var components: DatePickerComponents {
+        switch self {
+        case .date:
+            return .date
+        case .startTime, .endTime:
+            return .hourAndMinute
+        }
+    }
+}
+
+private struct BookingPickerRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct BookingDateWheelSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    @Binding var date: Date
+    let components: DatePickerComponents
+
+    var body: some View {
+        NavigationStack {
+            DatePicker(title, selection: $date, displayedComponents: components)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .padding()
+                .navigationTitle(title)
+                .toolbar {
+                    Button("Klaar") { dismiss() }
+                }
+        }
+        .presentationDetents([.height(340)])
     }
 }
 
@@ -158,12 +302,17 @@ struct LessonDetailView: View {
 
                     if lesson.kind == .lesson {
                         Section("Betaling") {
-                            TextField("Lesprijs", text: $amountText)
+                            TextField("Lesprijs in Euro", text: $amountText)
                                 .keyboardType(.decimalPad)
                             TextField("Betaald bedrag", text: $paidAmountText)
                                 .keyboardType(.decimalPad)
-                            Text("Open voor deze les: EUR \(max(0, lesson.remainingAmount), specifier: "%.2f")")
-                                .foregroundStyle(lesson.remainingAmount > 0 ? .red : .green)
+                            if let student = store.student(for: lesson) {
+                                Text("\(lessonBalanceTitle(for: student)): \(lessonBalanceText(for: student))")
+                                    .foregroundStyle(lessonBalanceColor(for: student))
+                            } else {
+                                Text("Openstaand bedrag: EUR \(max(0, lesson.remainingAmount), specifier: "%.2f")")
+                                    .foregroundStyle(lesson.remainingAmount > 0 ? .red : .green)
+                            }
                             Button("Zet op volledig betaald") {
                                 lesson.paidAmount = lesson.amount
                                 lesson.paid = true
@@ -247,6 +396,34 @@ struct LessonDetailView: View {
     private func saveLesson() {
         store.updateLesson(normalizedLesson)
         savedMessage = true
+    }
+
+    private func balanceWithCurrentLesson(for student: Student) -> Double {
+        let lessons = store.lessons(for: student).filter { $0.kind == .lesson }
+        let total = lessons.reduce(0) { result, existingLesson in
+            result + (existingLesson.id == lesson.id ? lesson.amount : existingLesson.amount)
+        }
+        let paid = lessons.reduce(0) { result, existingLesson in
+            result + (existingLesson.id == lesson.id ? lesson.paidAmount : existingLesson.paidAmount)
+        }
+        return total - paid
+    }
+
+    private func lessonBalanceTitle(for student: Student) -> String {
+        balanceWithCurrentLesson(for: student) < 0 ? "Tegoed" : "Openstaand bedrag"
+    }
+
+    private func lessonBalanceText(for student: Student) -> String {
+        let balance = balanceWithCurrentLesson(for: student)
+        if balance < 0 {
+            return "+ EUR \(abs(balance), specifier: "%.2f")"
+        }
+        return "EUR \(balance, specifier: "%.2f")"
+    }
+
+    private func lessonBalanceColor(for student: Student) -> Color {
+        let balance = balanceWithCurrentLesson(for: student)
+        return balance < 0 ? .green : balance > 0 ? .red : .green
     }
 }
 

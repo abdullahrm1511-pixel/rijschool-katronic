@@ -34,7 +34,7 @@ struct StudentsView: View {
                     NavigationLink {
                         StudentDetailView(student: student)
                     } label: {
-                        StudentRow(student: student, outstanding: store.outstandingAmount(for: student))
+                        StudentRow(student: student, balance: store.balanceAmount(for: student))
                     }
                 }
                 .onDelete { offsets in
@@ -59,7 +59,7 @@ struct StudentsView: View {
 
 struct StudentRow: View {
     let student: Student
-    let outstanding: Double
+    let balance: Double
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -67,10 +67,14 @@ struct StudentRow: View {
             Text(student.phone.isEmpty ? student.email : student.phone)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            if outstanding > 0 {
-                Text("EUR \(outstanding, specifier: "%.2f") open")
+            if balance > 0 {
+                Text("EUR \(balance, specifier: "%.2f") open")
                     .font(.caption.bold())
                     .foregroundStyle(.red)
+            } else if balance < 0 {
+                Text("+ EUR \(abs(balance), specifier: "%.2f") tegoed")
+                    .font(.caption.bold())
+                    .foregroundStyle(.green)
             }
         }
     }
@@ -110,9 +114,6 @@ struct StudentDetailView: View {
                 Picker("Leerling", selection: $student.status) {
                     ForEach(StudentStatus.allCases) { Text($0.rawValue).tag($0) }
                 }
-                Picker("Gezondheid", selection: $student.healthStatus) {
-                    ForEach(HealthStatus.allCases) { Text($0.rawValue).tag($0) }
-                }
                 Picker("Theorie", selection: Binding(
                     get: { student.theoryStatus },
                     set: { newStatus in
@@ -151,10 +152,15 @@ struct StudentDetailView: View {
                 let lessonPayments = store.lessons(for: student).filter { $0.kind == .lesson }
                 let totalAmount = lessonPayments.reduce(0) { $0 + $1.amount }
                 let paidAmount = lessonPayments.reduce(0) { $0 + $1.paidAmount }
-                Text("EUR \(store.outstandingAmount(for: student), specifier: "%.2f")")
+                let balance = store.balanceAmount(for: student)
+                Text(balance < 0 ? "+ EUR \(abs(balance), specifier: "%.2f")" : "EUR \(balance, specifier: "%.2f")")
                     .font(.title3.bold())
-                    .foregroundStyle(store.outstandingAmount(for: student) > 0 ? .red : .green)
-                Text("Totaal EUR \(totalAmount, specifier: "%.2f") - betaald EUR \(paidAmount, specifier: "%.2f")")
+                    .foregroundStyle(balance > 0 ? .red : .green)
+                Text(balance < 0 ? "Tegoed" : "Openstaand bedrag")
+                    .foregroundStyle(.secondary)
+                Text("Totaal EUR \(totalAmount, specifier: "%.2f")")
+                    .foregroundStyle(.secondary)
+                Text("Betaald EUR \(paidAmount, specifier: "%.2f")")
                     .foregroundStyle(.secondary)
             }
 
@@ -352,8 +358,7 @@ struct StudentFormView: View {
             ("Naam", name),
             ("Adres", address),
             ("Telefoon", phone),
-            ("E-mail", email),
-            ("Ophaaladres", pickupAddress)
+            ("E-mail", email)
         ]
         .filter { $0.1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         .map { $0.0 }

@@ -131,10 +131,10 @@ struct AgendaView: View {
                     .onEnded { value in
                         if abs(value.translation.width) > abs(value.translation.height) {
                             if value.translation.width < -70 {
-                                changeDay(by: 1)
+                                changeWeek(by: 1)
                             }
                             if value.translation.width > 70 {
-                                changeDay(by: -1)
+                                changeWeek(by: -1)
                             }
                         }
                     }
@@ -232,7 +232,7 @@ struct AgendaView: View {
     private var dayNavigator: some View {
         HStack(spacing: 12) {
             Button {
-                changeDay(by: -1)
+                changeWeek(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.headline)
@@ -248,7 +248,7 @@ struct AgendaView: View {
                 .frame(maxWidth: .infinity)
 
             Button {
-                changeDay(by: 1)
+                changeWeek(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.headline)
@@ -259,9 +259,9 @@ struct AgendaView: View {
         }
     }
 
-    private func changeDay(by days: Int) {
+    private func changeWeek(by weeks: Int) {
         withAnimation(.easeInOut(duration: 0.22)) {
-            selectedDate = Calendar.current.date(byAdding: .day, value: days, to: selectedDate) ?? selectedDate
+            selectedDate = Calendar.current.date(byAdding: .day, value: weeks * 7, to: selectedDate) ?? selectedDate
         }
     }
 
@@ -269,24 +269,28 @@ struct AgendaView: View {
         let days = (0..<7).compactMap { offset in
             Calendar.current.date(byAdding: .day, value: offset - weekdayOffset, to: selectedDate)
         }
-        return HStack {
+        return HStack(spacing: 4) {
             ForEach(days, id: \.self) { day in
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedDate = day
                     }
                 } label: {
-                    VStack {
+                    VStack(spacing: 3) {
                         Text(dayLetter(day))
-                            .font(.caption.bold())
+                            .font(.caption2.bold())
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         Text("\(Calendar.current.component(.day, from: day))")
-                            .font(.headline)
-                            .frame(width: 36, height: 36)
+                            .font(.subheadline.bold())
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .frame(width: 30, height: 30)
                             .background(Calendar.current.isDate(day, inSameDayAs: selectedDate) ? Color.red : Color.clear)
                             .clipShape(Circle())
                     }
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 48)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -416,9 +420,15 @@ struct AgendaRow: View {
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(minHeight: CGFloat(72 * span))
+            .frame(minHeight: mergedHeight)
             .background(lesson?.kind == .exam ? Color.orange.opacity(0.16) : Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 18))
         }
+    }
+
+    private var mergedHeight: CGFloat {
+        let rowHeight: CGFloat = 86
+        let rowSpacing: CGFloat = 16
+        return (rowHeight * CGFloat(span)) + (rowSpacing * CGFloat(max(0, span - 1)))
     }
 }
