@@ -1,7 +1,7 @@
 // Laadt SwiftUI voor schermen, knoppen, formulieren en navigatie.
 import SwiftUI
 
-// Instellingen-scherm met thema, lestijden, openstaand bedrag, lesoverzicht en export.
+// Instellingen-scherm met thema, lestijden, vaste lessen, lesoverzicht en export.
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @FocusState private var focusedField: SettingsField?
@@ -84,34 +84,6 @@ struct SettingsView: View {
                     TextField("Standaard lesprijs", value: $settings.defaultLessonAmount, format: .number)
                         .keyboardType(.decimalPad)
                         .focused($focusedField, equals: .lessonAmount)
-                }
-
-                // Totaal openstaand bedrag en per leerling de betaalregels.
-                Section("Openstaand") {
-                    Text("EUR \(store.outstandingAmount(), specifier: "%.2f")")
-                        .font(.largeTitle.bold())
-                    ForEach(store.data.students.filter { store.balanceAmount(for: $0) != 0 }) { student in
-                        let studentLessons = store.lessons(for: student).filter { $0.kind == .lesson }
-                        let totalAmount = studentLessons.reduce(0) { $0 + $1.amount }
-                        let paidAmount = studentLessons.reduce(0) { $0 + $1.paidAmount }
-                        let balance = store.balanceAmount(for: student)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(student.name).bold()
-                            Text(balance < 0 ? "+ EUR \(abs(balance), specifier: "%.2f") tegoed" : "EUR \(balance, specifier: "%.2f") open")
-                                .foregroundStyle(balance < 0 ? .green : .red)
-                            Text("Totaal EUR \(totalAmount, specifier: "%.2f")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("Betaald EUR \(paidAmount, specifier: "%.2f")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            ForEach(studentLessons) { lesson in
-                                Text("\(formatDutchDate(lesson.date)) - \(lesson.startTime)-\(lesson.endTime) - EUR \(lesson.amount, specifier: "%.2f") / betaald EUR \(lesson.paidAmount, specifier: "%.2f")")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
                 }
 
                 // Overzicht van automatisch ingeplande wekelijkse lessen.

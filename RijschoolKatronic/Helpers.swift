@@ -95,3 +95,28 @@ func formatBirthDate(_ date: Date) -> String {
     formatter.dateFormat = "dd-MM-yyyy"
     return formatter.string(from: date)
 }
+
+// Kiest het beste navigatie-adres: ophaaladres als dat bestaat, anders woonadres.
+func navigationAddress(for student: Student) -> String {
+    let pickupAddress = student.pickupAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !pickupAddress.isEmpty {
+        return pickupAddress
+    }
+    return student.address.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+// Maakt een Apple Kaarten-link met de leerling als bestemming.
+func appleMapsURL(for address: String) -> URL? {
+    guard let encodedAddress = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+        return nil
+    }
+    return URL(string: "http://maps.apple.com/?daddr=\(encodedAddress)&dirflg=d")
+}
+
+// Maakt een Google Maps-link met de leerling als bestemming.
+func googleMapsURL(for address: String) -> URL? {
+    guard let encodedAddress = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+        return nil
+    }
+    return URL(string: "https://www.google.com/maps/dir/?api=1&destination=\(encodedAddress)&travelmode=driving")
+}

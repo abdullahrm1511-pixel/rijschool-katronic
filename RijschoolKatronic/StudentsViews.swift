@@ -27,6 +27,12 @@ struct StudentsView: View {
     var body: some View {
         NavigationStack {
             List {
+                NavigationLink {
+                    FinanceOverviewView()
+                } label: {
+                    Label("Financiën", systemImage: "eurosign.circle")
+                }
+
                 // Segment wisselt tussen actieve en geslaagde leerlingen.
                 Picker("Status", selection: $showGraduated) {
                     Text("Actief").tag(false)
@@ -100,6 +106,9 @@ struct StudentDetailView: View {
             // Persoonsgegevens en locaties van de leerling.
             Section("Leerling") {
                 TextField("Adres", text: $student.address)
+                if !navigationAddress(for: student).isEmpty {
+                    MapsRouteMenu(address: navigationAddress(for: student))
+                }
                 Button {
                     showBirthDatePicker = true
                 } label: {
@@ -282,6 +291,72 @@ struct StudentDetailView: View {
     private var theoryExpiryDate: Date? {
         guard let passedDate = student.theoryPassedDate else { return nil }
         return Calendar.current.date(byAdding: .year, value: 2, to: passedDate)
+    }
+}
+
+// Financieel overzicht van alle leerlingen.
+struct FinanceOverviewView: View {
+    @EnvironmentObject private var store: AppStore
+
+    private var lessonStudents: [Student] {
+        store.data.students.filter { student in
+            !store.lessons(for: student).filter { $0.kind == .lesson }.isEmpty
+        }
+    }
+
+    private var totalAmount: Double {
+        store.data.lessons
+            .filter { $0.kind == .lesson }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private var paidAmount: Double {
+        store.paidAmount()
+    }
+
+    var body: some View {
+        List {
+            Section("Totaal") {
+                Text("Openstaand EUR \(store.outstandingAmount(), specifier: "%.2f")")
+                    .font(.title2.bold())
+                    .foregroundStyle(store.outstandingAmount() > 0 ? .red : .green)
+                Text("Totaal EUR \(totalAmount, specifier: "%.2f")")
+                    .foregroundStyle(.secondary)
+                Text("Betaald EUR \(paidAmount, specifier: "%.2f")")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Per leerling") {
+                if lessonStudents.isEmpty {
+                    Text("Nog geen lesbedragen")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(lessonStudents) { student in
+                        let studentLessons = store.lessons(for: student).filter { $0.kind == .lesson }
+                        let totalAmount = studentLessons.reduce(0) { $0 + $1.amount }
+                        let paidAmount = studentLessons.reduce(0) { $0 + $1.paidAmount }
+                        let balance = store.balanceAmount(for: student)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(student.name).bold()
+                            Text(balance < 0 ? "+ EUR \(abs(balance), specifier: "%.2f") tegoed" : "EUR \(balance, specifier: "%.2f") open")
+                                .foregroundStyle(balance < 0 ? .green : balance > 0 ? .red : .secondary)
+                            Text("Totaal EUR \(totalAmount, specifier: "%.2f")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Betaald EUR \(paidAmount, specifier: "%.2f")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            ForEach(studentLessons) { lesson in
+                                Text("\(formatDutchDate(lesson.date)) - \(lesson.startTime)-\(lesson.endTime) - EUR \(lesson.amount, specifier: "%.2f") / betaald EUR \(lesson.paidAmount, specifier: "%.2f")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Financiën")
     }
 }
 

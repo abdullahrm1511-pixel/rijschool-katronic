@@ -334,6 +334,9 @@ struct LessonDetailView: View {
                             LessonStudentInfoRow(title: "Werklocatie", value: student.workLocation)
                             LessonStudentInfoRow(title: "Telefoon", value: student.phone)
                             LessonStudentInfoRow(title: "E-mail", value: student.email)
+                            if !navigationAddress(for: student).isEmpty {
+                                MapsRouteMenu(address: navigationAddress(for: student))
+                            }
                         }
                     }
 
@@ -482,6 +485,34 @@ struct LessonDetailView: View {
     private func lessonBalanceColor(for student: Student) -> Color {
         let balance = balanceWithCurrentLesson(for: student)
         return balance < 0 ? .green : balance > 0 ? .red : .green
+    }
+}
+
+// Knop waarmee de instructeur direct naar Apple Kaarten of Google Maps kan.
+struct MapsRouteMenu: View {
+    @Environment(\.openURL) private var openURL
+    let address: String
+
+    var body: some View {
+        Menu {
+            Button {
+                if let url = appleMapsURL(for: address) {
+                    openURL(url)
+                }
+            } label: {
+                Label("Apple Kaarten", systemImage: "map")
+            }
+
+            Button {
+                if let url = googleMapsURL(for: address) {
+                    openURL(url)
+                }
+            } label: {
+                Label("Google Maps", systemImage: "location")
+            }
+        } label: {
+            Label("Route starten", systemImage: "car")
+        }
     }
 }
 
