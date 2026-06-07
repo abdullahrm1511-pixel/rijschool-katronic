@@ -1,3 +1,4 @@
+// Laadt Foundation voor datums, opslag, tekst en basisfuncties.
 import Foundation
 
 // Nederlandse maandnamen voor datums in de app.
@@ -12,6 +13,7 @@ let dutchWeekdays = [
 ]
 
 // Maakt van een Date een leesbare Nederlandse datum.
+// Functie die formatDutchDate uitvoert.
 func formatDutchDate(_ date: Date) -> String {
     let calendar = Calendar.current
     let weekday = dutchWeekdays[calendar.component(.weekday, from: date) - 1]
@@ -21,12 +23,14 @@ func formatDutchDate(_ date: Date) -> String {
 }
 
 // Zet "08:20" om naar minuten vanaf middernacht.
+// Functie die parseTime uitvoert.
 func parseTime(_ value: String) -> Int {
     let parts = value.split(separator: ":").map { Int($0) ?? 0 }
     return (parts.first ?? 0) * 60 + (parts.dropFirst().first ?? 0)
 }
 
 // Zet minuten vanaf middernacht weer terug naar "HH:mm".
+// Functie die makeTime uitvoert.
 func makeTime(_ minutes: Int) -> String {
     let hours = minutes / 60
     let mins = minutes % 60
@@ -34,6 +38,7 @@ func makeTime(_ minutes: Int) -> String {
 }
 
 // Maakt alle vrije agendablokken tussen start- en eindtijd.
+// Functie die makeTimeSlots uitvoert.
 func makeTimeSlots(start: String, end: String, minutes: Int) -> [(String, String)] {
     let startMinutes = parseTime(start)
     let endMinutes = parseTime(end)
@@ -49,6 +54,7 @@ func makeTimeSlots(start: String, end: String, minutes: Int) -> [(String, String
 }
 
 // Combineert een datum met een losse tijdstring.
+// Functie die dateWithTime uitvoert.
 func dateWithTime(_ date: Date, time: String) -> Date {
     let minutes = parseTime(time)
     var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
@@ -58,12 +64,14 @@ func dateWithTime(_ date: Date, time: String) -> Date {
 }
 
 // Haalt alleen de tijd uit een Date als "HH:mm".
+// Functie die timeString uitvoert.
 func timeString(from date: Date) -> String {
     let components = Calendar.current.dateComponents([.hour, .minute], from: date)
     return makeTime(((components.hour ?? 0) * 60) + (components.minute ?? 0))
 }
 
 // Berekent automatisch leeftijd uit de geboortedatum.
+// Functie die age uitvoert.
 func age(from birthDate: String) -> String {
     guard let date = parseBirthDate(birthDate) else { return "" }
     let years = Calendar.current.dateComponents([.year], from: date, to: Date()).year ?? 0
@@ -71,6 +79,7 @@ func age(from birthDate: String) -> String {
 }
 
 // Leest geboortedatum in het formaat dd-MM-yyyy.
+// Functie die parseBirthDate uitvoert.
 func parseBirthDate(_ value: String) -> Date? {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "nl_NL")
@@ -79,6 +88,7 @@ func parseBirthDate(_ value: String) -> Date? {
 }
 
 // Schrijft geboortedatum in het formaat dd-MM-yyyy.
+// Functie die formatBirthDate uitvoert.
 func formatBirthDate(_ date: Date) -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "nl_NL")

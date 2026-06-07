@@ -1,3 +1,4 @@
+// Laadt SwiftUI voor schermen, knoppen, formulieren en navigatie.
 import SwiftUI
 
 // Leerlingen-tab met actieve en geslaagde leerlingen.
@@ -390,6 +391,7 @@ struct StudentFormView: View {
     }
 
     // Maakt de leerling aan of toont welke verplichte velden missen.
+    // Functie die saveStudent uitvoert.
     private func saveStudent() {
         guard missingFields.isEmpty else {
             showMissingFields = true

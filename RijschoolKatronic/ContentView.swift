@@ -1,3 +1,4 @@
+// Laadt SwiftUI voor schermen, knoppen, formulieren en navigatie.
 import SwiftUI
 
 // Onderste tabs van de app.
@@ -215,6 +216,7 @@ struct AgendaView: View {
     }
 
     // Bepaalt hoeveel agenda-rijen een samengevoegde les hoog moet zijn.
+    // Functie die slotSpan uitvoert.
     private func slotSpan(for lesson: Lesson) -> Int {
         let duration = parseTime(lesson.endTime) - parseTime(lesson.startTime)
         guard duration > store.data.settings.lessonMinutes else { return 1 }
@@ -222,6 +224,7 @@ struct AgendaView: View {
     }
 
     // Zet sleepafstand om naar aantal blokken.
+    // Functie die blockCount uitvoert.
     private func blockCount(for dragHeight: CGFloat, from slot: (String, String)) -> Int {
         let rowHeight: CGFloat = 88
         let draggedBlocks = Int(max(0, dragHeight) / rowHeight) + 1
@@ -229,12 +232,14 @@ struct AgendaView: View {
     }
 
     // Voorkomt dat slepen voorbij het einde van de werkdag gaat.
+    // Functie die maxBlocks uitvoert.
     private func maxBlocks(from slot: (String, String)) -> Int {
         guard let index = timeSlots.firstIndex(where: { $0.0 == slot.0 }) else { return 1 }
         return max(1, timeSlots.count - index)
     }
 
     // Start het plannen en waarschuwt als de selectie over een bestaande les valt.
+    // Functie die startBooking uitvoert.
     private func startBooking(_ slot: (String, String), blockCount: Int) {
         let count = min(max(1, blockCount), maxBlocks(from: slot))
         if count > 1 && overlapsExistingLesson(startTime: slot.0, blockCount: count) {
@@ -247,6 +252,7 @@ struct AgendaView: View {
     }
 
     // Opent het plan-scherm met de juiste beginwaarden.
+    // Functie die openBooking uitvoert.
     private func openBooking(_ slot: (String, String), blockCount: Int, mode: Int) {
         bookingBlockCount = blockCount
         bookingMode = mode
@@ -254,6 +260,7 @@ struct AgendaView: View {
     }
 
     // Controleert of een nieuwe selectie botst met bestaande lessen of examens.
+    // Functie die overlapsExistingLesson uitvoert.
     private func overlapsExistingLesson(startTime: String, blockCount: Int) -> Bool {
         let start = parseTime(startTime)
         let end = start + (store.data.settings.lessonMinutes * blockCount)
@@ -294,6 +301,7 @@ struct AgendaView: View {
     }
 
     // Houdt dezelfde weekdag aan en schuift alleen een week op.
+    // Functie die changeWeek uitvoert.
     private func changeWeek(by weeks: Int) {
         withAnimation(.easeInOut(duration: 0.22)) {
             selectedDate = Calendar.current.date(byAdding: .day, value: weeks * 7, to: selectedDate) ?? selectedDate
@@ -341,6 +349,7 @@ struct AgendaView: View {
     }
 
     // Korte letter voor de dag in de weekbalk.
+    // Functie die dayLetter uitvoert.
     private func dayLetter(_ date: Date) -> String {
         let letters = ["Z", "M", "D", "W", "D", "V", "Z"]
         return letters[Calendar.current.component(.weekday, from: date) - 1]

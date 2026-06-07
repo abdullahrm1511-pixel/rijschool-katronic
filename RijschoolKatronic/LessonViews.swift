@@ -1,3 +1,4 @@
+// Laadt SwiftUI voor schermen, knoppen, formulieren en navigatie.
 import SwiftUI
 
 // Scherm dat verschijnt als je een vrije plek in de agenda wilt plannen.
@@ -183,16 +184,19 @@ struct BookingSheet: View {
     }
 
     // Totaal betaald door deze leerling.
+    // Functie die paidTotal uitvoert.
     private func paidTotal(for student: Student) -> Double {
         store.paidAmount(for: student)
     }
 
     // Tekst verandert naar Tegoed als leerling meer betaald heeft dan verschuldigd.
+    // Functie die balanceTitle uitvoert.
     private func balanceTitle(for student: Student) -> String {
         store.balanceAmount(for: student) < 0 ? "Tegoed" : "Openstaand bedrag"
     }
 
     // Bedragstekst voor openstaand of tegoed.
+    // Functie die balanceText uitvoert.
     private func balanceText(for student: Student) -> String {
         let balance = store.balanceAmount(for: student)
         if balance < 0 {
@@ -202,12 +206,14 @@ struct BookingSheet: View {
     }
 
     // Rood bij openstaand, groen bij betaald/tegoed.
+    // Functie die balanceColor uitvoert.
     private func balanceColor(for student: Student) -> Color {
         let balance = store.balanceAmount(for: student)
         return balance < 0 ? .green : balance > 0 ? .red : .green
     }
 
     // Koppelt de juiste DatePicker aan datum, starttijd of eindtijd.
+    // Functie die dateBinding uitvoert.
     private func dateBinding(for picker: BookingDatePicker) -> Binding<Date> {
         switch picker {
         case .date:
@@ -436,12 +442,14 @@ struct LessonDetailView: View {
     }
 
     // Schrijft de les naar de store en toont kort "Opgeslagen".
+    // Functie die saveLesson uitvoert.
     private func saveLesson() {
         store.updateLesson(normalizedLesson)
         savedMessage = true
     }
 
     // Rekent openstaand/tegoed opnieuw met de nog niet opgeslagen invoer van deze les.
+    // Functie die balanceWithCurrentLesson uitvoert.
     private func balanceWithCurrentLesson(for student: Student) -> Double {
         let lessons = store.lessons(for: student).filter { $0.kind == .lesson }
         let total = lessons.reduce(0) { result, existingLesson in
@@ -454,11 +462,13 @@ struct LessonDetailView: View {
     }
 
     // Label voor openstaand of tegoed op de lespagina.
+    // Functie die lessonBalanceTitle uitvoert.
     private func lessonBalanceTitle(for student: Student) -> String {
         balanceWithCurrentLesson(for: student) < 0 ? "Tegoed" : "Openstaand bedrag"
     }
 
     // Bedragstekst voor openstaand of tegoed op de lespagina.
+    // Functie die lessonBalanceText uitvoert.
     private func lessonBalanceText(for student: Student) -> String {
         let balance = balanceWithCurrentLesson(for: student)
         if balance < 0 {
@@ -468,6 +478,7 @@ struct LessonDetailView: View {
     }
 
     // Rood/groen voor het saldo op de lespagina.
+    // Functie die lessonBalanceColor uitvoert.
     private func lessonBalanceColor(for student: Student) -> Color {
         let balance = balanceWithCurrentLesson(for: student)
         return balance < 0 ? .green : balance > 0 ? .red : .green
@@ -492,11 +503,13 @@ struct LessonStudentInfoRow: View {
 }
 
 // Leest euro-invoer met komma of punt.
+// Functie die parseEuroInput uitvoert.
 private func parseEuroInput(_ value: String) -> Double {
     Double(value.replacingOccurrences(of: ",", with: ".")) ?? 0
 }
 
 // Toont eurobedragen met komma, zoals in Nederland gebruikelijk is.
+// Functie die formatEuroInput uitvoert.
 private func formatEuroInput(_ value: Double) -> String {
     String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",")
 }

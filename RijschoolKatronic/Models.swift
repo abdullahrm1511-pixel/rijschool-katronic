@@ -1,3 +1,4 @@
+// Laadt Foundation voor datums, opslag, tekst en basisfuncties.
 import Foundation
 
 // Status waarmee leerlingen apart als actief of geslaagd getoond worden.
@@ -100,6 +101,7 @@ struct Student: Identifiable, Codable, Equatable {
     var createdAt = Date()
 
     // Eigen init zodat nieuwe velden een standaardwaarde kunnen krijgen.
+    // Maakt dit object aan met beginwaarden.
     init(
         id: UUID = UUID(),
         name: String,
@@ -153,6 +155,7 @@ struct Student: Identifiable, Codable, Equatable {
     }
 
     // Leest ook oudere opgeslagen leerlingen zonder nieuwe velden netjes in.
+    // Leest opgeslagen data terug en vult ontbrekende oude velden veilig aan.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
@@ -195,6 +198,7 @@ struct Lesson: Identifiable, Codable, Equatable {
     }
 
     // Betaald bedrag wordt automatisch gevuld als een oude les alleen paid=true had.
+    // Maakt dit object aan met beginwaarden.
     init(
         id: UUID = UUID(),
         studentId: UUID,
@@ -242,6 +246,7 @@ struct Lesson: Identifiable, Codable, Equatable {
     }
 
     // Leest oudere lessen in en vult ontbrekende betaalde bedragen/onderdelen aan.
+    // Leest opgeslagen data terug en vult ontbrekende oude velden veilig aan.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()

@@ -1,3 +1,4 @@
+// Laadt SwiftUI voor schermen, knoppen, formulieren en navigatie.
 import SwiftUI
 
 // Instellingen-scherm met thema, lestijden, openstaand bedrag, lesoverzicht en export.
@@ -225,12 +226,14 @@ struct SettingsView: View {
     }
 
     // Slaat instellingen op en sluit het toetsenbord.
+    // Functie die saveSettings uitvoert.
     private func saveSettings() {
         store.updateSettings(settings)
         focusedField = nil
     }
 
     // Bouwt een CSV-export tussen twee gekozen datums.
+    // Functie die makeLessonExport uitvoert.
     private func makeLessonExport() -> URL? {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: min(exportStartDate, exportEndDate))
@@ -288,6 +291,7 @@ struct SettingsView: View {
     }
 
     // Zorgt dat puntkomma's en enters veilig in CSV blijven.
+    // Functie die escapeCSV uitvoert.
     private func escapeCSV(_ value: String) -> String {
         let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
         if escaped.contains(";") || escaped.contains("\n") || escaped.contains("\"") {

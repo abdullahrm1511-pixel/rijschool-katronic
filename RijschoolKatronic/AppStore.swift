@@ -1,7 +1,10 @@
+// Laadt Foundation voor datums, opslag, tekst en basisfuncties.
 import Foundation
 
 // Centrale app-store: bewaart data, wijzigt data en schrijft alles lokaal naar de iPhone.
+// Startpunt van de app.
 @MainActor
+// Centrale app-store voor leerlingen, lessen, instellingen en lokale opslag.
 final class AppStore: ObservableObject {
     // Zodra data verandert, wordt deze automatisch opgeslagen.
     @Published var data: AppData {
@@ -11,6 +14,7 @@ final class AppStore: ObservableObject {
     private let storageKey = "rijschool-katronic-swift-data-v1"
 
     // Laadt opgeslagen data bij het openen van de app.
+    // Maakt dit object aan met beginwaarden.
     init() {
         if let saved = UserDefaults.standard.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode(AppData.self, from: saved) {
@@ -23,12 +27,14 @@ final class AppStore: ObservableObject {
     }
 
     // Voegt een nieuwe leerling toe.
+    // Functie die addStudent uitvoert.
     func addStudent(_ student: Student) {
         data.students.insert(normalizedStudent(student), at: 0)
         save()
     }
 
     // Past bestaande leerlinggegevens aan.
+    // Functie die updateStudent uitvoert.
     func updateStudent(_ student: Student) {
         let updated = normalizedStudent(student)
         data.students = data.students.map { $0.id == updated.id ? updated : $0 }
@@ -36,6 +42,7 @@ final class AppStore: ObservableObject {
     }
 
     // Verwijdert een leerling inclusief alle lessen van die leerling.
+    // Functie die deleteStudent uitvoert.
     func deleteStudent(_ student: Student) {
         data.students.removeAll { $0.id == student.id }
         data.lessons.removeAll { $0.studentId == student.id }
@@ -43,12 +50,14 @@ final class AppStore: ObservableObject {
     }
 
     // Zet een losse les of examen in de agenda.
+    // Functie die addLesson uitvoert.
     func addLesson(_ lesson: Lesson) {
         data.lessons.append(lesson)
         save()
     }
 
     // Maakt 24 wekelijkse lessen en slaat drukke tijden over.
+    // Functie die addWeeklyLessons uitvoert.
     func addWeeklyLessons(studentId: UUID, startDate: Date, startTime: String, endTime: String, amount: Double) -> Int {
         let seriesId = UUID()
         var created = 0
@@ -78,6 +87,7 @@ final class AppStore: ObservableObject {
     }
 
     // Slaat wijzigingen op een bestaande les op.
+    // Functie die updateLesson uitvoert.
     func updateLesson(_ lesson: Lesson) {
         guard let index = data.lessons.firstIndex(where: { $0.id == lesson.id }) else { return }
         data.lessons[index] = lesson
@@ -85,18 +95,21 @@ final class AppStore: ObservableObject {
     }
 
     // Verwijdert een les zodat het blok weer vrij wordt.
+    // Functie die deleteLesson uitvoert.
     func deleteLesson(_ lesson: Lesson) {
         data.lessons.removeAll { $0.id == lesson.id }
         save()
     }
 
     // Verwijdert een complete vaste lessenreeks.
+    // Functie die deleteRecurringSeries uitvoert.
     func deleteRecurringSeries(_ seriesId: UUID) {
         data.lessons.removeAll { $0.recurringSeriesId == seriesId }
         save()
     }
 
     // Geeft alle lessen van een bepaalde dag terug, gesorteerd op tijd.
+    // Functie die lessons uitvoert.
     func lessons(on date: Date) -> [Lesson] {
         data.lessons
             .filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
@@ -104,16 +117,19 @@ final class AppStore: ObservableObject {
     }
 
     // Zoekt de leerling die bij een les hoort.
+    // Functie die student uitvoert.
     func student(for lesson: Lesson) -> Student? {
         data.students.first { $0.id == lesson.studentId }
     }
 
     // Alleen het openstaande bedrag; tegoed wordt hier als 0 getoond.
+    // Functie die outstandingAmount uitvoert.
     func outstandingAmount(for student: Student? = nil) -> Double {
         max(0, balanceAmount(for: student))
     }
 
     // Rekent totale schuld of tegoed uit. Negatief betekent tegoed.
+    // Functie die balanceAmount uitvoert.
     func balanceAmount(for student: Student? = nil) -> Double {
         let lessons = data.lessons
             .filter { lesson in
@@ -125,6 +141,7 @@ final class AppStore: ObservableObject {
     }
 
     // Telt op hoeveel er betaald is.
+    // Functie die paidAmount uitvoert.
     func paidAmount(for student: Student? = nil) -> Double {
         data.lessons
             .filter { lesson in
@@ -134,6 +151,7 @@ final class AppStore: ObservableObject {
     }
 
     // Alle lessen van een leerling, nieuwste bovenaan.
+    // Functie die lessons uitvoert.
     func lessons(for student: Student) -> [Lesson] {
         data.lessons
             .filter { $0.studentId == student.id }
@@ -146,6 +164,7 @@ final class AppStore: ObservableObject {
     }
 
     // Telt per leerling hoe vaak ieder rijonderdeel behandeld is.
+    // Functie die treatedPartCounts uitvoert.
     func treatedPartCounts(for student: Student) -> [TreatedPartCount] {
         let counts = lessons(for: student)
             .flatMap(\.treatedPartIds)
@@ -159,12 +178,14 @@ final class AppStore: ObservableObject {
     }
 
     // Slaat instellingen zoals thema, lestijden en lesprijs op.
+    // Functie die updateSettings uitvoert.
     func updateSettings(_ settings: AppSettings) {
         data.settings = settings
         save()
     }
 
     // Controleert of twee lessen elkaar in tijd raken.
+    // Functie die overlaps uitvoert.
     private func overlaps(_ a: Lesson, _ b: Lesson) -> Bool {
         Calendar.current.isDate(a.date, inSameDayAs: b.date) &&
         a.startTime < b.endTime &&
@@ -172,6 +193,7 @@ final class AppStore: ObservableObject {
     }
 
     // Houdt oude data netjes bij en laat theorie verlopen na twee jaar.
+    // Functie die normalizedStudent uitvoert.
     private func normalizedStudent(_ student: Student) -> Student {
         var updated = student
         if updated.theoryStatus == .gehaald && updated.theoryPassedDate == nil {
@@ -186,6 +208,7 @@ final class AppStore: ObservableObject {
     }
 
     // Schrijft alle appdata naar UserDefaults, lokaal op de iPhone.
+    // Functie die save uitvoert.
     private func save() {
         if let encoded = try? JSONEncoder().encode(data) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
