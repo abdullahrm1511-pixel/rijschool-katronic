@@ -1,11 +1,13 @@
 import SwiftUI
 
+// Leerlingen-tab met actieve en geslaagde leerlingen.
 struct StudentsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var query = ""
     @State private var showGraduated = false
     @State private var showAddStudent = false
 
+    // Filtert op status en zoektekst.
     private var filteredStudents: [Student] {
         store.data.students.filter { student in
             (showGraduated ? student.status == .geslaagd : student.status == .actief) &&
@@ -24,12 +26,14 @@ struct StudentsView: View {
     var body: some View {
         NavigationStack {
             List {
+                // Segment wisselt tussen actieve en geslaagde leerlingen.
                 Picker("Status", selection: $showGraduated) {
                     Text("Actief").tag(false)
                     Text("Geslaagd").tag(true)
                 }
                 .pickerStyle(.segmented)
 
+                // Swipe naar links om een leerling te verwijderen.
                 ForEach(filteredStudents) { student in
                     NavigationLink {
                         StudentDetailView(student: student)
@@ -57,6 +61,7 @@ struct StudentsView: View {
     }
 }
 
+// Compacte rij in de leerlingenlijst.
 struct StudentRow: View {
     let student: Student
     let balance: Double
@@ -80,6 +85,7 @@ struct StudentRow: View {
     }
 }
 
+// Detailpagina van een bestaande leerling.
 struct StudentDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
@@ -90,6 +96,7 @@ struct StudentDetailView: View {
 
     var body: some View {
         Form {
+            // Persoonsgegevens en locaties van de leerling.
             Section("Leerling") {
                 TextField("Adres", text: $student.address)
                 Button {
@@ -110,6 +117,7 @@ struct StudentDetailView: View {
                 Text("Leeftijd: \(age(from: student.birthDate))")
             }
 
+            // Status van leerling en theorie. Theorie-datum bepaalt automatisch verloop.
             Section("Status") {
                 Picker("Leerling", selection: $student.status) {
                     ForEach(StudentStatus.allCases) { Text($0.rawValue).tag($0) }
@@ -143,11 +151,13 @@ struct StudentDetailView: View {
                 }
             }
 
+            // De enige gewone vrije notitie van de leerling.
             Section("Notitie") {
                 TextField("Notitie", text: $student.notes, axis: .vertical)
                     .lineLimit(3...6)
             }
 
+            // Financieel totaal van deze leerling.
             Section("Openstaand") {
                 let lessonPayments = store.lessons(for: student).filter { $0.kind == .lesson }
                 let totalAmount = lessonPayments.reduce(0) { $0 + $1.amount }
@@ -164,6 +174,7 @@ struct StudentDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
+            // Telt alle aangevinkte onderdelen over alle lessen van deze leerling.
             Section("Totaal onderdelen") {
                 let counts = store.treatedPartCounts(for: student)
                 if counts.isEmpty {
@@ -181,6 +192,7 @@ struct StudentDetailView: View {
                 }
             }
 
+            // Historie van alle lessen en examens van deze leerling.
             Section("Alle lessen") {
                 let lessons = store.lessons(for: student)
                 if lessons.isEmpty {
@@ -204,10 +216,12 @@ struct StudentDetailView: View {
             }
 
             Section {
+                // Handmatig bewaren en terug naar vorige scherm.
                 Button("Bewaar leerling") {
                     store.updateStudent(student)
                     dismiss()
                 }
+                // Verwijdert leerling en bijbehorende lessen.
                 Button(role: .destructive) {
                     store.deleteStudent(student)
                     dismiss()
@@ -221,6 +235,7 @@ struct StudentDetailView: View {
             LessonDetailView(lesson: lesson)
         }
         .sheet(isPresented: $showBirthDatePicker) {
+            // Geboortedatum wordt met het iOS draaiwiel gekozen.
             DateWheelSheet(
                 title: "Geboortedatum",
                 date: Binding(
@@ -230,6 +245,7 @@ struct StudentDetailView: View {
             )
         }
         .sheet(isPresented: $showTheoryDatePicker) {
+            // Theorie behaald datum wordt ook met het iOS draaiwiel gekozen.
             DateWheelSheet(
                 title: "Theorie behaald op",
                 date: Binding(
@@ -247,23 +263,28 @@ struct StudentDetailView: View {
             )
         }
         .onDisappear {
+            // Automatisch opslaan als de gebruiker teruggaat.
             store.updateStudent(student)
         }
         .onChange(of: student) { updatedStudent in
+            // Direct opslaan bij wijzigingen.
             store.updateStudent(updatedStudent)
         }
     }
 
+    // Standaarddatum voor lege geboortedatum.
     private var defaultBirthDate: Date {
         Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
     }
 
+    // Theorie verloopt twee jaar na de behaalde datum.
     private var theoryExpiryDate: Date? {
         guard let passedDate = student.theoryPassedDate else { return nil }
         return Calendar.current.date(byAdding: .year, value: 2, to: passedDate)
     }
 }
 
+// Formulier voor het toevoegen van een nieuwe leerling.
 struct StudentFormView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
@@ -286,6 +307,7 @@ struct StudentFormView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Basisgegevens. Niet alles is verplicht; validatie staat onderaan.
                 TextField("Naam", text: $name)
                 TextField("Adres", text: $address)
                 Button {
@@ -304,6 +326,7 @@ struct StudentFormView: View {
                 TextField("Schoollocatie", text: $schoolLocation)
                 TextField("Werklocatie", text: $workLocation)
                 TextField("Notitie", text: $notes, axis: .vertical)
+                // Theorie kan direct bij nieuwe leerling ingevuld worden.
                 Section("Theorie") {
                     Picker("Theorie", selection: $theoryStatus) {
                         ForEach(TheoryStatus.allCases) { Text($0.rawValue).tag($0) }
@@ -323,6 +346,7 @@ struct StudentFormView: View {
                 }
 
                 Section {
+                    // Knop onderaan voor opslaan.
                     Button("Bewaar leerling") {
                         saveStudent()
                     }
@@ -353,6 +377,7 @@ struct StudentFormView: View {
         }
     }
 
+    // Alleen deze velden zijn verplicht bij een nieuwe leerling.
     private var missingFields: [String] {
         [
             ("Naam", name),
@@ -364,6 +389,7 @@ struct StudentFormView: View {
         .map { $0.0 }
     }
 
+    // Maakt de leerling aan of toont welke verplichte velden missen.
     private func saveStudent() {
         guard missingFields.isEmpty else {
             showMissingFields = true
@@ -388,6 +414,7 @@ struct StudentFormView: View {
     }
 }
 
+// Klein sheet-scherm met een echte iOS wheel datepicker.
 struct DateWheelSheet: View {
     @Environment(\.dismiss) private var dismiss
     let title: String

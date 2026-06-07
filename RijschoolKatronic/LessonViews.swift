@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Scherm dat verschijnt als je een vrije plek in de agenda wilt plannen.
 struct BookingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
@@ -22,6 +23,7 @@ struct BookingSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Keuze tussen losse les, vaste wekelijkse les of examen.
                 Picker("Type", selection: $mode) {
                     Text("Les").tag(0)
                     Text("Wekelijks").tag(1)
@@ -29,6 +31,7 @@ struct BookingSheet: View {
                 }
                 .pickerStyle(.segmented)
 
+                // Alleen actieve leerlingen kunnen ingepland worden.
                 Picker("Leerling", selection: $selectedStudentId) {
                     Text("Kies leerling").tag(UUID?.none)
                     ForEach(store.data.students.filter { $0.status == .actief }) { student in
@@ -37,6 +40,7 @@ struct BookingSheet: View {
                 }
 
                 if let selectedStudent {
+                    // Laat direct zien wat deze leerling al betaald heeft en wat nog openstaat.
                     Section("Betaling leerling") {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Betaald totaal")
@@ -59,6 +63,7 @@ struct BookingSheet: View {
                             }
                         }
                         Button {
+                            // Springt naar Instellingen waar het totale lesoverzicht staat.
                             dismiss()
                             onShowTotalOverview()
                         } label: {
@@ -68,8 +73,10 @@ struct BookingSheet: View {
                 }
 
                 if mode != 2 {
+                    // Voor lessen kies je alleen het aantal blokken; eindtijd wordt berekend.
                     Stepper("Aantal blokken: \(blockCount)", value: $blockCount, in: 1...6)
                 } else {
+                    // Examens gebruiken losse datum/tijd-kiezers.
                     Section("Datum en tijd") {
                         Button {
                             activeDatePicker = .date
@@ -97,6 +104,7 @@ struct BookingSheet: View {
             }
             .navigationTitle("\(plannedStartTimeString) - \(actualEndTime)")
             .onAppear {
+                // Beginwaarden komen uit het gekozen agendablok.
                 blockCount = max(1, initialBlockCount)
                 mode = initialMode
                 plannedDate = date
@@ -111,6 +119,7 @@ struct BookingSheet: View {
                     Button("Plan") {
                         guard let selectedStudentId else { return }
                         if mode == 1 {
+                            // Vaste les: maak automatisch een reeks van wekelijkse lessen.
                             _ = store.addWeeklyLessons(
                                 studentId: selectedStudentId,
                                 startDate: plannedDate,
@@ -119,6 +128,7 @@ struct BookingSheet: View {
                                 amount: lessonAmount
                             )
                         } else {
+                            // Losse les of examen: sla een enkele planning op.
                             store.addLesson(Lesson(
                                 studentId: selectedStudentId,
                                 kind: mode == 2 ? .exam : .lesson,
@@ -145,36 +155,44 @@ struct BookingSheet: View {
         }
     }
 
+    // Eindtijd voor lessen wordt berekend uit starttijd, lesduur en aantal blokken.
     private var actualEndTime: String {
         guard mode != 2 else { return plannedEndTimeString }
         return makeTime(parseTime(plannedStartTimeString) + (store.data.settings.lessonMinutes * blockCount))
     }
 
+    // Bedrag van deze planning op basis van standaard lesprijs maal aantal blokken.
     private var lessonAmount: Double {
         store.data.settings.defaultLessonAmount * Double(blockCount)
     }
 
+    // Starttijd uit de wheel picker als tekst.
     private var plannedStartTimeString: String {
         timeString(from: plannedStartTime)
     }
 
+    // Eindtijd uit de wheel picker als tekst.
     private var plannedEndTimeString: String {
         timeString(from: plannedEndTime)
     }
 
+    // De gekozen leerling uit de store.
     private var selectedStudent: Student? {
         guard let selectedStudentId else { return nil }
         return store.data.students.first { $0.id == selectedStudentId }
     }
 
+    // Totaal betaald door deze leerling.
     private func paidTotal(for student: Student) -> Double {
         store.paidAmount(for: student)
     }
 
+    // Tekst verandert naar Tegoed als leerling meer betaald heeft dan verschuldigd.
     private func balanceTitle(for student: Student) -> String {
         store.balanceAmount(for: student) < 0 ? "Tegoed" : "Openstaand bedrag"
     }
 
+    // Bedragstekst voor openstaand of tegoed.
     private func balanceText(for student: Student) -> String {
         let balance = store.balanceAmount(for: student)
         if balance < 0 {
@@ -183,11 +201,13 @@ struct BookingSheet: View {
         return "EUR \(balance, specifier: "%.2f")"
     }
 
+    // Rood bij openstaand, groen bij betaald/tegoed.
     private func balanceColor(for student: Student) -> Color {
         let balance = store.balanceAmount(for: student)
         return balance < 0 ? .green : balance > 0 ? .red : .green
     }
 
+    // Koppelt de juiste DatePicker aan datum, starttijd of eindtijd.
     private func dateBinding(for picker: BookingDatePicker) -> Binding<Date> {
         switch picker {
         case .date:
@@ -200,6 +220,7 @@ struct BookingSheet: View {
     }
 }
 
+// Welke datum/tijd-picker in het plannen-scherm open staat.
 private enum BookingDatePicker: Identifiable {
     case date
     case startTime
@@ -209,6 +230,7 @@ private enum BookingDatePicker: Identifiable {
         title
     }
 
+    // Titel boven het wheel-scherm.
     var title: String {
         switch self {
         case .date:
@@ -220,6 +242,7 @@ private enum BookingDatePicker: Identifiable {
         }
     }
 
+    // Bepaalt of de picker datum of tijd toont.
     var components: DatePickerComponents {
         switch self {
         case .date:
@@ -230,6 +253,7 @@ private enum BookingDatePicker: Identifiable {
     }
 }
 
+// Herbruikbare rij voor datum/tijd met waarde rechts.
 private struct BookingPickerRow: View {
     let title: String
     let value: String
@@ -244,6 +268,7 @@ private struct BookingPickerRow: View {
     }
 }
 
+// iOS wheel picker in een klein sheet-scherm.
 private struct BookingDateWheelSheet: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
@@ -265,6 +290,7 @@ private struct BookingDateWheelSheet: View {
     }
 }
 
+// Detailpagina van een les of examen.
 struct LessonDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
@@ -277,6 +303,7 @@ struct LessonDetailView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Extra tab voor behandelde rijonderdelen per les.
                 Picker("Tab", selection: $tab) {
                     Text("Les").tag(0)
                     Text("Onderdelen").tag(1)
@@ -284,6 +311,7 @@ struct LessonDetailView: View {
                 .pickerStyle(.segmented)
 
                 if tab == 0 {
+                    // Basisgegevens van de les of het examen.
                     Section(lesson.kind == .exam ? "Examen" : "Les") {
                         if let student = store.student(for: lesson) {
                             Text(student.name)
@@ -292,6 +320,7 @@ struct LessonDetailView: View {
                     }
 
                     if let student = store.student(for: lesson) {
+                        // Contact- en locatiegegevens zodat de instructeur die bij de les ziet.
                         Section("Leerlinggegevens") {
                             LessonStudentInfoRow(title: "Adres", value: student.address)
                             LessonStudentInfoRow(title: "Ophaaladres", value: student.pickupAddress)
@@ -308,6 +337,7 @@ struct LessonDetailView: View {
                     }
 
                     if lesson.kind == .lesson {
+                        // Betaling per les, inclusief openstaand/tegoed voor de leerling.
                         Section("Betaling") {
                             TextField("Lesprijs in Euro", text: $amountText)
                                 .keyboardType(.decimalPad)
@@ -335,12 +365,14 @@ struct LessonDetailView: View {
                     }
 
                     Button(role: .destructive) {
+                        // Verwijderen maakt het agendablok weer vrij.
                         store.deleteLesson(lesson)
                         dismiss()
                     } label: {
                         Text(lesson.kind == .exam ? "Examen verwijderen" : "Les verwijderen")
                     }
                 } else {
+                    // Per les aanvinken welke rijonderdelen behandeld zijn.
                     Section("Behandelde onderdelen") {
                         ForEach(instructionParts) { part in
                             Toggle(part.title, isOn: Binding(
@@ -376,9 +408,11 @@ struct LessonDetailView: View {
                 }
             }
             .onDisappear {
+                // Ook opslaan als iemand terug swipet of het scherm sluit.
                 saveLesson()
             }
             .onChange(of: lesson) { _ in
+                // Direct opslaan tijdens wijzigen, zodat de Bewaar-knop niet kwetsbaar is.
                 store.updateLesson(normalizedLesson)
             }
             .onAppear {
@@ -394,17 +428,20 @@ struct LessonDetailView: View {
         }
     }
 
+    // Bepaalt automatisch of een les volledig betaald is.
     private var normalizedLesson: Lesson {
         var updated = lesson
         updated.paid = updated.kind == .exam || updated.paidAmount >= updated.amount
         return updated
     }
 
+    // Schrijft de les naar de store en toont kort "Opgeslagen".
     private func saveLesson() {
         store.updateLesson(normalizedLesson)
         savedMessage = true
     }
 
+    // Rekent openstaand/tegoed opnieuw met de nog niet opgeslagen invoer van deze les.
     private func balanceWithCurrentLesson(for student: Student) -> Double {
         let lessons = store.lessons(for: student).filter { $0.kind == .lesson }
         let total = lessons.reduce(0) { result, existingLesson in
@@ -416,10 +453,12 @@ struct LessonDetailView: View {
         return total - paid
     }
 
+    // Label voor openstaand of tegoed op de lespagina.
     private func lessonBalanceTitle(for student: Student) -> String {
         balanceWithCurrentLesson(for: student) < 0 ? "Tegoed" : "Openstaand bedrag"
     }
 
+    // Bedragstekst voor openstaand of tegoed op de lespagina.
     private func lessonBalanceText(for student: Student) -> String {
         let balance = balanceWithCurrentLesson(for: student)
         if balance < 0 {
@@ -428,12 +467,14 @@ struct LessonDetailView: View {
         return "EUR \(balance, specifier: "%.2f")"
     }
 
+    // Rood/groen voor het saldo op de lespagina.
     private func lessonBalanceColor(for student: Student) -> Color {
         let balance = balanceWithCurrentLesson(for: student)
         return balance < 0 ? .green : balance > 0 ? .red : .green
     }
 }
 
+// Toont leerlinggegevens alleen als het veld gevuld is.
 struct LessonStudentInfoRow: View {
     let title: String
     let value: String
@@ -450,10 +491,12 @@ struct LessonStudentInfoRow: View {
     }
 }
 
+// Leest euro-invoer met komma of punt.
 private func parseEuroInput(_ value: String) -> Double {
     Double(value.replacingOccurrences(of: ",", with: ".")) ?? 0
 }
 
+// Toont eurobedragen met komma, zoals in Nederland gebruikelijk is.
 private func formatEuroInput(_ value: Double) -> String {
     String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",")
 }

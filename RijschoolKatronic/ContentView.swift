@@ -1,16 +1,19 @@
 import SwiftUI
 
+// Onderste tabs van de app.
 enum AppTab: Hashable {
     case agenda
     case students
     case settings
 }
 
+// Hoofdscherm met Agenda, Leerlingen en Instellingen onderin.
 struct ContentView: View {
     @EnvironmentObject private var store: AppStore
     @State private var selectedTab: AppTab = .agenda
 
     var body: some View {
+        // selectedTab maakt het mogelijk om vanuit een scherm naar Instellingen te springen.
         TabView(selection: $selectedTab) {
             AgendaView(selectedTab: $selectedTab)
                 .tabItem { Label("Agenda", systemImage: "calendar") }
@@ -28,6 +31,7 @@ struct ContentView: View {
         .preferredColorScheme(colorScheme)
     }
 
+    // Accentkleur past mee met het gekozen thema.
     private var accentColor: Color {
         switch store.data.settings.theme {
         case .donker:
@@ -39,6 +43,7 @@ struct ContentView: View {
         }
     }
 
+    // Bepaalt of iOS de app licht of donker toont.
     private var colorScheme: ColorScheme? {
         switch store.data.settings.theme {
         case .donker:
@@ -51,6 +56,7 @@ struct ContentView: View {
     }
 }
 
+// Agenda-scherm met dagplanning, examens en vrije plekken.
 struct AgendaView: View {
     @EnvironmentObject private var store: AppStore
     @Binding var selectedTab: AppTab
@@ -74,6 +80,7 @@ struct AgendaView: View {
 
                     examBanner
 
+                    // Elk tijdslot wordt een losse rij, behalve slots die onder een samengevoegde les vallen.
                     ForEach(timeSlots, id: \.0) { slot in
                         let dayLessons = store.lessons(on: selectedDate)
                         let lesson = dayLessons.first { $0.startTime == slot.0 }
@@ -89,6 +96,7 @@ struct AgendaView: View {
                                 span: lesson.map(slotSpan(for:)) ?? 1
                             )
                             .onTapGesture {
+                                // Tik op een bestaande les opent details; tik op vrij blok opent plannen.
                                 if let lesson {
                                     selectedLesson = lesson
                                 } else {
@@ -96,6 +104,7 @@ struct AgendaView: View {
                                 }
                             }
                             .gesture(
+                                // Lang indrukken met slepen kiest meerdere blokken achter elkaar.
                                 LongPressGesture(minimumDuration: 0.45)
                                     .sequenced(before: DragGesture(minimumDistance: 0))
                                     .onEnded { value in
@@ -138,6 +147,7 @@ struct AgendaView: View {
                 }
             }
             .gesture(
+                // Links/rechts swipen wisselt naar dezelfde dag in vorige/volgende week.
                 DragGesture(minimumDistance: 30)
                     .onEnded { value in
                         if abs(value.translation.width) > abs(value.translation.height) {
@@ -168,6 +178,7 @@ struct AgendaView: View {
                         initialBlockCount: bookingBlockCount,
                         initialMode: bookingMode,
                         onShowTotalOverview: {
+                            // Knop vanuit les plannen brengt de instructeur naar totaaloverzicht bij instellingen.
                             selectedTab = .settings
                         }
                     )
@@ -186,6 +197,7 @@ struct AgendaView: View {
         }
     }
 
+    // Maakt de lijst met agenda-tijden uit de instellingen.
     private var timeSlots: [(String, String)] {
         makeTimeSlots(
             start: store.data.settings.dayStartTime,
@@ -194,6 +206,7 @@ struct AgendaView: View {
         )
     }
 
+    // Standaard startblok voor examen plannen via Opties.
     private var defaultBookingSlot: (String, String) {
         (
             store.data.settings.dayStartTime,
@@ -201,23 +214,27 @@ struct AgendaView: View {
         )
     }
 
+    // Bepaalt hoeveel agenda-rijen een samengevoegde les hoog moet zijn.
     private func slotSpan(for lesson: Lesson) -> Int {
         let duration = parseTime(lesson.endTime) - parseTime(lesson.startTime)
         guard duration > store.data.settings.lessonMinutes else { return 1 }
         return max(1, Int(ceil(Double(duration) / Double(store.data.settings.lessonMinutes))))
     }
 
+    // Zet sleepafstand om naar aantal blokken.
     private func blockCount(for dragHeight: CGFloat, from slot: (String, String)) -> Int {
         let rowHeight: CGFloat = 88
         let draggedBlocks = Int(max(0, dragHeight) / rowHeight) + 1
         return min(max(1, draggedBlocks), maxBlocks(from: slot))
     }
 
+    // Voorkomt dat slepen voorbij het einde van de werkdag gaat.
     private func maxBlocks(from slot: (String, String)) -> Int {
         guard let index = timeSlots.firstIndex(where: { $0.0 == slot.0 }) else { return 1 }
         return max(1, timeSlots.count - index)
     }
 
+    // Start het plannen en waarschuwt als de selectie over een bestaande les valt.
     private func startBooking(_ slot: (String, String), blockCount: Int) {
         let count = min(max(1, blockCount), maxBlocks(from: slot))
         if count > 1 && overlapsExistingLesson(startTime: slot.0, blockCount: count) {
@@ -229,12 +246,14 @@ struct AgendaView: View {
         }
     }
 
+    // Opent het plan-scherm met de juiste beginwaarden.
     private func openBooking(_ slot: (String, String), blockCount: Int, mode: Int) {
         bookingBlockCount = blockCount
         bookingMode = mode
         bookingSlot = slot
     }
 
+    // Controleert of een nieuwe selectie botst met bestaande lessen of examens.
     private func overlapsExistingLesson(startTime: String, blockCount: Int) -> Bool {
         let start = parseTime(startTime)
         let end = start + (store.data.settings.lessonMinutes * blockCount)
@@ -243,6 +262,7 @@ struct AgendaView: View {
         }
     }
 
+    // Pijlen boven de agenda: vorige/volgende week.
     private var dayNavigator: some View {
         HStack(spacing: 12) {
             Button {
@@ -273,12 +293,14 @@ struct AgendaView: View {
         }
     }
 
+    // Houdt dezelfde weekdag aan en schuift alleen een week op.
     private func changeWeek(by weeks: Int) {
         withAnimation(.easeInOut(duration: 0.22)) {
             selectedDate = Calendar.current.date(byAdding: .day, value: weeks * 7, to: selectedDate) ?? selectedDate
         }
     }
 
+    // Bovenste balk met de zeven dagen van de huidige week.
     private var weekStrip: some View {
         let days = (0..<7).compactMap { offset in
             Calendar.current.date(byAdding: .day, value: offset - weekdayOffset, to: selectedDate)
@@ -312,16 +334,19 @@ struct AgendaView: View {
         }
     }
 
+    // Berekent hoeveel dagen terug naar maandag de weekbalk moet beginnen.
     private var weekdayOffset: Int {
         let weekday = Calendar.current.component(.weekday, from: selectedDate)
         return weekday == 1 ? 6 : weekday - 2
     }
 
+    // Korte letter voor de dag in de weekbalk.
     private func dayLetter(_ date: Date) -> String {
         let letters = ["Z", "M", "D", "W", "D", "V", "Z"]
         return letters[Calendar.current.component(.weekday, from: date) - 1]
     }
 
+    // Waarschuwingsblok bovenaan als er op deze dag examens staan.
     @ViewBuilder
     private var examBanner: some View {
         let exams = store.lessons(on: selectedDate).filter { $0.kind == .exam }
@@ -343,11 +368,13 @@ struct AgendaView: View {
     }
 }
 
+// Overzicht met alle geplande examens.
 struct ExamOverviewView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
     @State private var selectedLesson: Lesson?
 
+    // Alle examens, eerstvolgende bovenaan.
     private var exams: [Lesson] {
         store.data.lessons
             .filter { $0.kind == .exam }
@@ -393,6 +420,7 @@ struct ExamOverviewView: View {
     }
 }
 
+// Een rij in de agenda: vrije plek, les of examen.
 struct AgendaRow: View {
     let startTime: String
     let endTime: String
@@ -440,6 +468,7 @@ struct AgendaRow: View {
         }
     }
 
+    // Samengevoegde lessen blijven visueel even hoog als meerdere losse blokken.
     private var mergedHeight: CGFloat {
         let rowHeight: CGFloat = 86
         let rowSpacing: CGFloat = 16

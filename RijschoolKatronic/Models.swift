@@ -1,5 +1,6 @@
 import Foundation
 
+// Status waarmee leerlingen apart als actief of geslaagd getoond worden.
 enum StudentStatus: String, Codable, CaseIterable, Identifiable {
     case actief = "Actief"
     case geslaagd = "Geslaagd"
@@ -7,6 +8,7 @@ enum StudentStatus: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// Staat nog in het model zodat oude opgeslagen data blijft openen.
 enum HealthStatus: String, Codable, CaseIterable, Identifiable {
     case nietGestart = "Niet gestart"
     case aangevraagd = "Aangevraagd"
@@ -16,6 +18,7 @@ enum HealthStatus: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// Theorie-status inclusief verlopen na twee jaar.
 enum TheoryStatus: String, Codable, CaseIterable, Identifiable {
     case nietGestart = "Niet gestart"
     case bezig = "Bezig"
@@ -25,11 +28,13 @@ enum TheoryStatus: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// Verschil tussen een gewone rijles en een examen in de agenda.
 enum LessonKind: String, Codable {
     case lesson
     case exam
 }
 
+// Thema's die bij Instellingen gekozen kunnen worden.
 enum AppTheme: String, Codable, CaseIterable, Identifiable {
     case donker = "Donker"
     case blauw = "Blauw"
@@ -38,11 +43,13 @@ enum AppTheme: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// Een rijonderdeel dat per les kan worden aangevinkt.
 struct InstructionPart: Identifiable, Equatable {
     var id: Int
     var title: String
 }
 
+// Telt hoe vaak een rijonderdeel bij een leerling behandeld is.
 struct TreatedPartCount: Identifiable, Equatable {
     var part: InstructionPart
     var count: Int
@@ -50,6 +57,7 @@ struct TreatedPartCount: Identifiable, Equatable {
     var id: Int { part.id }
 }
 
+// Alfabetische lijst van alle rijonderdelen.
 let instructionParts: [InstructionPart] = [
     InstructionPart(id: 18, title: "Achteruitrijden"),
     InstructionPart(id: 8, title: "Afslaan"),
@@ -73,6 +81,7 @@ let instructionParts: [InstructionPart] = [
     InstructionPart(id: 1, title: "Zit- en stuurhouding, autogordel, spiegels")
 ].sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
 
+// Alle gegevens die bij een leerling horen.
 struct Student: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
@@ -90,6 +99,7 @@ struct Student: Identifiable, Codable, Equatable {
     var notes: String
     var createdAt = Date()
 
+    // Eigen init zodat nieuwe velden een standaardwaarde kunnen krijgen.
     init(
         id: UUID = UUID(),
         name: String,
@@ -142,6 +152,7 @@ struct Student: Identifiable, Codable, Equatable {
         case createdAt
     }
 
+    // Leest ook oudere opgeslagen leerlingen zonder nieuwe velden netjes in.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
@@ -162,6 +173,7 @@ struct Student: Identifiable, Codable, Equatable {
     }
 }
 
+// Een ingeplande les of examen in de agenda.
 struct Lesson: Identifiable, Codable, Equatable {
     var id = UUID()
     var studentId: UUID
@@ -177,10 +189,12 @@ struct Lesson: Identifiable, Codable, Equatable {
     var recurringSeriesId: UUID?
     var createdAt = Date()
 
+    // Positief betekent dat er voor deze les nog iets openstaat.
     var remainingAmount: Double {
         amount - paidAmount
     }
 
+    // Betaald bedrag wordt automatisch gevuld als een oude les alleen paid=true had.
     init(
         id: UUID = UUID(),
         studentId: UUID,
@@ -227,6 +241,7 @@ struct Lesson: Identifiable, Codable, Equatable {
         case createdAt
     }
 
+    // Leest oudere lessen in en vult ontbrekende betaalde bedragen/onderdelen aan.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
@@ -245,6 +260,7 @@ struct Lesson: Identifiable, Codable, Equatable {
     }
 }
 
+// Instellingen die de instructeur kan aanpassen.
 struct AppSettings: Codable, Equatable {
     var theme: AppTheme = .donker
     var dayStartTime = "08:20"
@@ -253,6 +269,7 @@ struct AppSettings: Codable, Equatable {
     var defaultLessonAmount = 55.0
 }
 
+// Alles wat lokaal op de iPhone wordt bewaard.
 struct AppData: Codable {
     var students: [Student] = []
     var lessons: [Lesson] = []

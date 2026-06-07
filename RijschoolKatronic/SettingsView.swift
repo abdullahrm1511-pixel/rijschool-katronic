@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Instellingen-scherm met thema, lestijden, openstaand bedrag, lesoverzicht en export.
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @FocusState private var focusedField: SettingsField?
@@ -11,6 +12,7 @@ struct SettingsView: View {
     @State private var exportFileURL: URL?
     @State private var exportMessage = ""
 
+    // Groepeert alle wekelijkse lessen tot vaste reeksen.
     private var fixedLessonSeries: [FixedLessonSeries] {
         let grouped = Dictionary(grouping: store.data.lessons.filter { $0.recurringSeriesId != nil }) { lesson in
             lesson.recurringSeriesId!
@@ -37,6 +39,7 @@ struct SettingsView: View {
         }
     }
 
+    // Alle lessen, gefilterd op zoektekst zoals leerling, datum of notitie.
     private var filteredLessons: [Lesson] {
         store.data.lessons
             .sorted {
@@ -62,6 +65,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Thema verandert de uitstraling van de hele app.
                 Section("Thema") {
                     Picker("Thema", selection: $settings.theme) {
                         ForEach(AppTheme.allCases) { Text($0.rawValue).tag($0) }
@@ -69,6 +73,7 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                // Werkdag, lesduur en standaard lesprijs voor nieuwe lessen.
                 Section("Lestijden") {
                     TextField("Starttijd", text: $settings.dayStartTime)
                         .focused($focusedField, equals: .dayStart)
@@ -80,6 +85,7 @@ struct SettingsView: View {
                         .focused($focusedField, equals: .lessonAmount)
                 }
 
+                // Totaal openstaand bedrag en per leerling de betaalregels.
                 Section("Openstaand") {
                     Text("EUR \(store.outstandingAmount(), specifier: "%.2f")")
                         .font(.largeTitle.bold())
@@ -107,6 +113,7 @@ struct SettingsView: View {
                     }
                 }
 
+                // Overzicht van automatisch ingeplande wekelijkse lessen.
                 Section("Vaste lessen") {
                     if fixedLessonSeries.isEmpty {
                         Text("Geen vaste lessen ingepland")
@@ -135,11 +142,13 @@ struct SettingsView: View {
                     }
                 }
 
+                // Zoekveld voor het complete lesarchief.
                 Section("Alle lessen zoeken") {
                     TextField("Zoek datum, leerling of tijd", text: $lessonSearch)
                         .focused($focusedField, equals: .lessonSearch)
                 }
 
+                // Compleet lesoverzicht; tikken opent de lesdetails.
                 Section("Alle lessen") {
                     if filteredLessons.isEmpty {
                         Text("Geen lessen gevonden")
@@ -170,6 +179,7 @@ struct SettingsView: View {
                     }
                 }
 
+                // Maakt een CSV-bestand dat Excel kan openen en delen.
                 Section("Excel export") {
                     DatePicker("Vanaf", selection: $exportStartDate, displayedComponents: .date)
                     DatePicker("Tot en met", selection: $exportEndDate, displayedComponents: .date)
@@ -214,11 +224,13 @@ struct SettingsView: View {
         }
     }
 
+    // Slaat instellingen op en sluit het toetsenbord.
     private func saveSettings() {
         store.updateSettings(settings)
         focusedField = nil
     }
 
+    // Bouwt een CSV-export tussen twee gekozen datums.
     private func makeLessonExport() -> URL? {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: min(exportStartDate, exportEndDate))
@@ -233,10 +245,12 @@ struct SettingsView: View {
                 return $0.date < $1.date
             }
 
+        // Eerste rij zijn de kolomnamen in Excel.
         var rows = [
             ["Datum", "Start", "Einde", "Leerling", "Ophaaladres", "Schoollocatie", "Werklocatie", "Type", "Lesprijs", "Betaald", "Open", "Notitie", "Onderdelen"]
         ]
         for lesson in lessons {
+            // Per les worden leerlinggegevens en behandelde onderdelen meegenomen.
             let student = store.student(for: lesson)
             let parts = instructionParts
                 .filter { lesson.treatedPartIds.contains($0.id) }
@@ -259,6 +273,7 @@ struct SettingsView: View {
             ])
         }
 
+        // Puntkomma werkt goed met Nederlandse Excel-instellingen.
         let csv = rows
             .map { $0.map(escapeCSV).joined(separator: ";") }
             .joined(separator: "\n")
@@ -272,6 +287,7 @@ struct SettingsView: View {
         }
     }
 
+    // Zorgt dat puntkomma's en enters veilig in CSV blijven.
     private func escapeCSV(_ value: String) -> String {
         let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
         if escaped.contains(";") || escaped.contains("\n") || escaped.contains("\"") {
@@ -281,6 +297,7 @@ struct SettingsView: View {
     }
 }
 
+// Velden die het toetsenbord kunnen openen in Instellingen.
 private enum SettingsField: Hashable {
     case dayStart
     case dayEnd
@@ -288,6 +305,7 @@ private enum SettingsField: Hashable {
     case lessonSearch
 }
 
+// Samenvatting van een vaste wekelijkse lessenreeks.
 private struct FixedLessonSeries: Identifiable {
     let id: UUID
     let studentName: String
